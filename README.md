@@ -1,2 +1,2 @@
 # es1-frontend
-Frontend for the first project of Software Engineering course @ Computer Science @ UFSC
+Frontend and backend for the first project of Software Engineering course @ Computer Science @ UFSC
