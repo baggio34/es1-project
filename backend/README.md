@@ -1,0 +1,1 @@
+Rodar com `npm run server`
