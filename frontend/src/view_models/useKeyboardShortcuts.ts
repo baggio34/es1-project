@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { OperationType } from '../types/calculator'
+import type { OperationType } from '../models/calculator'
 
 interface CalculatorActions {
   inputDigit: (digit: string) => void

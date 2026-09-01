@@ -3,7 +3,7 @@ import type {
   CalculatorInput,
   CalculatorOutput,
   OperationType,
-} from '../types/calculator'
+} from '../models/calculator'
 
 export class CalculatorApiError extends Error {
   public readonly code: string

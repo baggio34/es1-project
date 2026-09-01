@@ -3,7 +3,7 @@ import { calculatorApi } from '../api/calculatorApi'
 import {
   OPERATIONS,
   type OperationType,
-} from '../types/calculator'
+} from '../models/calculator'
 
 const MAX_DIGITS = 14
 

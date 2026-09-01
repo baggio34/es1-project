@@ -1,5 +1,5 @@
 import React from 'react'
-import type { OperationType } from '../../types/calculator'
+import type { OperationType } from '../../models/calculator'
 import { CalcButton } from './CalcButton'
 
 interface KeypadProps {

@@ -1,6 +1,6 @@
 import React from 'react'
-import { useCalculator } from '../../hooks/useCalculator'
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { useCalculator } from '../../view_models/useCalculator'
+import { useKeyboardShortcuts } from '../../view_models/useKeyboardShortcuts'
 import { Display } from '../Display/Display'
 import { Keypad } from '../Keypad/Keypad'
 
