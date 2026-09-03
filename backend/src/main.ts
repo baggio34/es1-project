@@ -1,5 +1,10 @@
+import deletionRouter from '@/endpoints/deletion_endpoints.ts'
+import registrationRouter from '@/endpoints/registration_endpoints.ts'
+import retrievalRouter from '@/endpoints/retrieval_endpoints.ts'
 import fastify from 'fastify'
-import calculatorRouter from './endpoints/calculator_endpoint.ts'
+import fastifySwagger from '@fastify/swagger'
+import fastifySwaggerUi from '@fastify/swagger-ui'
+import orderProcessingRouter from '@/endpoints/order_processing_endpoints.ts'
 
 const app = fastify({
   logger: {
@@ -13,7 +18,27 @@ const app = fastify({
   }
 })
 
-app.register(calculatorRouter)
+await app.register(fastifySwagger, {
+  openapi: {
+    info: {
+      title: 'Backend',
+      version: '1.0.0'
+    },
+  }
+})
+
+await app.register(fastifySwaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: false
+  }
+})
+
+await app.register(registrationRouter)
+await app.register(deletionRouter)
+await app.register(retrievalRouter)
+await app.register(orderProcessingRouter)
 
 app.listen({ port: 3000 }, (err, _address) => {
   if (err) {
