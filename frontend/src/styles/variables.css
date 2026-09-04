@@ -1,57 +1,63 @@
 :root {
-  /* Tipografia */
+  /* Tipografia Corporativa */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
-  /* Cores Base (Dark Theme Elegante e Neutro) */
-  --color-bg-app: #0f1117;
-  --color-bg-card: #181a24;
-  --color-bg-display: #11131c;
-  --color-border: #262938;
-  --color-border-subtle: #1e212d;
+  /* Cores de Fundo (Branco e Cinza Claro Sólidos) */
+  --color-bg-app: #f8fafc;        /* Slate 50 - Fundo geral */
+  --color-bg-surface: #ffffff;    /* Branco puro - Cards, Tabelas, Sidebar, Header */
+  --color-bg-subtle: #f1f5f9;     /* Slate 100 - Cabeçalhos de tabelas, inputs desabilitados */
+  --color-bg-hover: #e2e8f0;      /* Slate 200 - Hover em linhas e botões neutros */
 
-  --color-text-primary: #f3f4f8;
-  --color-text-secondary: #949ab1;
-  --color-text-muted: #5e647c;
+  /* Paleta Corporativa de Azul */
+  --color-primary: #1e40af;       /* Blue 800 - Ações primárias sólidas, cabeçalhos de destaque */
+  --color-primary-hover: #1e3a8a; /* Blue 900 - Hover do botão primário */
+  --color-primary-light: #eff6ff; /* Blue 50 - Fundo ativo de menus e badges suaves */
+  --color-primary-border: #bfdbfe;/* Blue 200 - Bordas de destaque ativo */
+  --color-primary-muted: #3b82f6; /* Blue 500 - Links secundários e ícones */
 
-  /* Botões Numéricos */
-  --btn-num-bg: #222533;
-  --btn-num-bg-hover: #2c3042;
-  --btn-num-text: #f0f2f8;
-  --btn-num-border: #2e3244;
+  /* Bordas Sólidas */
+  --color-border: #e2e8f0;        /* Slate 200 - Bordas padrão de tabelas, cards e inputs */
+  --color-border-subtle: #f1f5f9; /* Slate 100 - Divisores suaves */
+  --color-border-strong: #cbd5e1; /* Slate 300 - Foco e separadores principais */
 
-  /* Botões de Ação (AC, ⌫, ±) */
-  --btn-action-bg: #282c3c;
-  --btn-action-bg-hover: #33384c;
-  --btn-action-text: #d5d9ea;
-  --btn-action-border: #363b50;
+  /* Tipografia Corporativa */
+  --color-text-primary: #0f172a;   /* Slate 900 - Textos principais, títulos, rótulos */
+  --color-text-secondary: #475569; /* Slate 600 - Subtítulos, labels secundárias */
+  --color-text-muted: #94a3b8;     /* Slate 400 - Placeholders, dicas */
+  --color-text-on-primary: #ffffff;/* Branco puro para texto sobre azul */
 
-  /* Botões de Operação (+, −, ×, ÷) */
-  --btn-op-bg: #2d2645;
-  --btn-op-bg-hover: #3b325b;
-  --btn-op-bg-active: #7c3aed;
-  --btn-op-text: #c4b5fd;
-  --btn-op-text-active: #ffffff;
-  --btn-op-border: #443869;
+  /* Estados de Feedback Corporativos (Contidos e Profissionais) */
+  --color-success-bg: #f0fdf4;
+  --color-success-text: #166534;
+  --color-success-border: #bbf7d0;
 
-  /* Botão Igual (=) */
-  --btn-equals-bg: #2563eb;
-  --btn-equals-bg-hover: #1d4ed8;
-  --btn-equals-text: #ffffff;
-  --btn-equals-border: #3b82f6;
+  --color-warning-bg: #fffbeb;
+  --color-warning-text: #92400e;
+  --color-warning-border: #fde68a;
 
-  /* Estados de feedback */
-  --color-error: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-danger-text: #991b1b;
+  --color-danger-border: #fecaca;
+  --color-danger-button: #dc2626;
+  --color-danger-button-hover: #b91c1c;
 
-  /* Sombras e Elevações */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-  --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  --color-info-bg: #eff6ff;
+  --color-info-text: #1e40af;
+  --color-info-border: #bfdbfe;
 
-  /* Dimensões */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Sombras Sutis (Material Design Corporativo - Sem Neons) */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+  /* Cantos Arredondados (Padrão shadcn/ui) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* Transições Suaves */
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
