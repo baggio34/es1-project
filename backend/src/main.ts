@@ -5,6 +5,7 @@ import fastify from 'fastify'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
 import orderProcessingRouter from '@/endpoints/order_processing_endpoints.ts'
+import cors from '@fastify/cors'
 
 const app = fastify({
   logger: {
@@ -16,6 +17,11 @@ const app = fastify({
       },
     },
   }
+})
+
+await app.register(cors, {
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 })
 
 await app.register(fastifySwagger, {

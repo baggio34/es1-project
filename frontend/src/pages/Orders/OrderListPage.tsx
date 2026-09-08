@@ -27,7 +27,9 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
 
-  const filteredOrders = orders.filter((order) => {
+  
+  const safeOrders = Array.isArray(orders) ? orders : []
+  const filteredOrders = safeOrders.filter((order) => {
     const query = searchTerm.toLowerCase()
     const matchesSearch =
       order.description.toLowerCase().includes(query) ||

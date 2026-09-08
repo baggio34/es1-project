@@ -3,14 +3,14 @@ import { AppLayout } from '../components/Layout/AppLayout.tsx'
 import type { DomainType } from '../components/Layout/Sidebar.tsx'
 
 // Models
-import type { Driver, DriverFormData } from '../models/driver.ts'
-import type { Vehicle, VehicleFormData } from '../models/vehicle.ts'
-import type { Order, OrderFormData } from '../models/order.ts'
+import type { DriverFormData } from '../models/driver.ts'
+import type { VehicleFormData } from '../models/vehicle.ts'
+import type { OrderFormData } from '../models/order.ts'
 
-// Mocks
-import { initialMockDrivers } from './Drivers/mockDrivers.ts'
-import { initialMockVehicles } from './Vehicles/mockVehicles.ts'
-import { initialMockOrders } from './Orders/mockOrders.ts'
+// Custom Hooks (View Models)
+import { useDriver } from '../view_models/useDriver.ts'
+import { useVehicle } from '../view_models/useVehicle.ts'
+import { useOrder } from '../view_models/useOrder.ts'
 
 // Driver Pages
 import { DriverListPage } from './Drivers/DriverListPage.tsx'
@@ -34,10 +34,30 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Estados locais mockados para simular reatividade visual completa
-  const [drivers, setDrivers] = useState<Driver[]>(initialMockDrivers)
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialMockVehicles)
-  const [orders, setOrders] = useState<Order[]>(initialMockOrders)
+  // Consumindo os hooks conectados ao backend Fastify
+  const {
+    drivers,
+    loading: loadingDrivers,
+    error: errorDrivers,
+    saveDriver,
+    deleteDriver,
+  } = useDriver()
+
+  const {
+    vehicles,
+    loading: loadingVehicles,
+    error: errorVehicles,
+    saveVehicle,
+    deleteVehicle,
+  } = useVehicle()
+
+  const {
+    orders,
+    loading: loadingOrders,
+    error: errorOrders,
+    saveOrder,
+    deleteOrder,
+  } = useOrder()
 
   // Navegação entre domínios
   const handleSelectDomain = (domain: DomainType) => {
@@ -47,199 +67,48 @@ export default function App() {
   }
 
   // --- Handlers de Motoristas ---
-  const handleSaveDriver = (data: DriverFormData) => {
-    if (viewMode === 'edit' && selectedId) {
-      setDrivers((prev) =>
-        prev.map((d) => {
-          if (d.id !== selectedId) return d
-          if (data.status === 'free') {
-            return {
-              id: d.id,
-              name: data.name,
-              cpf: data.cpf,
-              status: 'free',
-            }
-          } else {
-            return {
-              id: d.id,
-              name: data.name,
-              cpf: data.cpf,
-              status: data.status,
-              vehicleId: data.vehicleId || ('vehicleId' in d ? d.vehicleId : 'v2000000-0000-0000-0000-000000000001'),
-              orderIds: 'orderIds' in d ? d.orderIds : [],
-            }
-          }
-        })
-      )
-    } else {
-      const newDriver: Driver =
-        data.status === 'free'
-          ? {
-              id: crypto.randomUUID(),
-              name: data.name,
-              cpf: data.cpf,
-              status: 'free',
-            }
-          : {
-              id: crypto.randomUUID(),
-              name: data.name,
-              cpf: data.cpf,
-              status: data.status,
-              vehicleId: 'v2000000-0000-0000-0000-000000000001',
-              orderIds: [],
-            }
-      setDrivers((prev) => [newDriver, ...prev])
+  const handleSaveDriver = async (data: DriverFormData) => {
+    try {
+      await saveDriver(data, selectedId)
+      setViewMode('list')
+      setSelectedId(null)
+    } catch (err) {
+      // O erro já é tratado no hook, mas é capturado aqui para evitar a troca de tela
     }
-    setViewMode('list')
-    setSelectedId(null)
   }
 
-  const handleDeleteDriver = (id: string) => {
-    setDrivers((prev) => prev.filter((d) => d.id !== id))
+  const handleDeleteDriver = async (id: string) => {
+    await deleteDriver(id)
   }
 
   // --- Handlers de Veículos ---
-  const handleSaveVehicle = (data: VehicleFormData) => {
-    if (viewMode === 'edit' && selectedId) {
-      setVehicles((prev) =>
-        prev.map((v) => {
-          if (v.id !== selectedId) return v
-          if (data.status === 'free') {
-            return {
-              id: v.id,
-              model: data.model,
-              plate: data.plate,
-              color: data.color,
-              internalVolume: data.internalVolume,
-              maxLoad: data.maxLoad,
-              status: 'free',
-            }
-          } else {
-            return {
-              id: v.id,
-              model: data.model,
-              plate: data.plate,
-              color: data.color,
-              internalVolume: data.internalVolume,
-              maxLoad: data.maxLoad,
-              status: data.status,
-              driverId: data.driverId || ('driverId' in v ? v.driverId : 'd1000000-0000-0000-0000-000000000001'),
-              orderIds: 'orderIds' in v ? v.orderIds : [],
-            }
-          }
-        })
-      )
-    } else {
-      const newVehicle: Vehicle =
-        data.status === 'free'
-          ? {
-              id: crypto.randomUUID(),
-              model: data.model,
-              plate: data.plate,
-              color: data.color,
-              internalVolume: data.internalVolume,
-              maxLoad: data.maxLoad,
-              status: 'free',
-            }
-          : {
-              id: crypto.randomUUID(),
-              model: data.model,
-              plate: data.plate,
-              color: data.color,
-              internalVolume: data.internalVolume,
-              maxLoad: data.maxLoad,
-              status: data.status,
-              driverId: 'd1000000-0000-0000-0000-000000000001',
-              orderIds: [],
-            }
-      setVehicles((prev) => [newVehicle, ...prev])
+  const handleSaveVehicle = async (data: VehicleFormData) => {
+    try {
+      await saveVehicle(data, selectedId)
+      setViewMode('list')
+      setSelectedId(null)
+    } catch (err) {
+      // Impede a troca de tela em caso de falha no backend
     }
-    setViewMode('list')
-    setSelectedId(null)
   }
 
-  const handleDeleteVehicle = (id: string) => {
-    setVehicles((prev) => prev.filter((v) => v.id !== id))
+  const handleDeleteVehicle = async (id: string) => {
+    await deleteVehicle(id)
   }
 
   // --- Handlers de Pedidos ---
-  const handleSaveOrder = (data: OrderFormData) => {
-    if (viewMode === 'edit' && selectedId) {
-      setOrders((prev) =>
-        prev.map((o) => {
-          if (o.id !== selectedId) return o
-          return {
-            ...o,
-            description: data.description,
-            clientName: data.clientName,
-            clientCpf: data.clientCpf,
-            destination: data.destination,
-            value: data.value,
-            weight: data.weight,
-            volume: data.volume,
-            status: data.status || o.status,
-          } as Order
-        })
-      )
-    } else {
-      const baseOrder = {
-        id: crypto.randomUUID(),
-        registeredOn: new Date().toISOString(),
-        description: data.description,
-        clientName: data.clientName,
-        clientCpf: data.clientCpf,
-        destination: data.destination,
-        value: data.value,
-        weight: data.weight,
-        volume: data.volume,
-      }
-
-      let newOrder: Order
-      const st = data.status || 'pendingApproval'
-      if (st === 'waitingDispatch' || st === 'onRoute') {
-        newOrder = {
-          ...baseOrder,
-          status: st,
-          driverId: 'd1000000-0000-0000-0000-000000000001',
-          vehicleId: 'v2000000-0000-0000-0000-000000000001',
-        }
-      } else if (st === 'arrived') {
-        newOrder = {
-          ...baseOrder,
-          status: 'arrived',
-          driverId: 'd1000000-0000-0000-0000-000000000001',
-          vehicleId: 'v2000000-0000-0000-0000-000000000001',
-          arrivedOn: new Date().toISOString(),
-        }
-      } else if (st === 'rejected') {
-        newOrder = {
-          ...baseOrder,
-          status: 'rejected',
-          reason: 'Cancelado pelo operador.',
-        }
-      } else if (st === 'accident') {
-        newOrder = {
-          ...baseOrder,
-          status: 'accident',
-          driverId: 'd1000000-0000-0000-0000-000000000001',
-          vehicleId: 'v2000000-0000-0000-0000-000000000001',
-          accidentMessage: 'Incidente registrado.',
-          accidentTime: new Date().toISOString(),
-        }
-      } else {
-        newOrder = {
-          ...baseOrder,
-          status: st as 'pendingApproval' | 'waitingPayment' | 'inPreparation',
-        }
-      }
-      setOrders((prev) => [newOrder, ...prev])
+  const handleSaveOrder = async (data: OrderFormData) => {
+    try {
+      await saveOrder(data, selectedId)
+      setViewMode('list')
+      setSelectedId(null)
+    } catch (err) {
+      // Impede a troca de tela em caso de falha no backend
     }
-    setViewMode('list')
-    setSelectedId(null)
   }
 
-  const handleDeleteOrder = (id: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== id))
+  const handleDeleteOrder = async (id: string) => {
+    await deleteOrder(id)
   }
 
   // Títulos para o layout
@@ -260,6 +129,9 @@ export default function App() {
   const renderContent = () => {
     // 1. DOMÍNIO MOTORISTAS
     if (currentDomain === 'drivers') {
+      if (loadingDrivers) return <div>Carregando motoristas...</div>
+      if (errorDrivers) return <div className="text-red-500">Erro: {errorDrivers}</div>
+
       if (viewMode === 'detail' && selectedId) {
         const driver = drivers.find((d) => d.id === selectedId)
         if (!driver) return <div>Motorista não encontrado.</div>
@@ -305,6 +177,9 @@ export default function App() {
 
     // 2. DOMÍNIO FROTA (VEÍCULOS)
     if (currentDomain === 'vehicles') {
+      if (loadingVehicles) return <div>Carregando veículos...</div>
+      if (errorVehicles) return <div className="text-red-500">Erro: {errorVehicles}</div>
+
       if (viewMode === 'detail' && selectedId) {
         const vehicle = vehicles.find((v) => v.id === selectedId)
         if (!vehicle) return <div>Veículo não encontrado.</div>
@@ -349,6 +224,9 @@ export default function App() {
     }
 
     // 3. DOMÍNIO PEDIDOS
+    if (loadingOrders) return <div>Carregando pedidos...</div>
+    if (errorOrders) return <div className="text-red-500">Erro: {errorOrders}</div>
+
     if (viewMode === 'detail' && selectedId) {
       const order = orders.find((o) => o.id === selectedId)
       if (!order) return <div>Pedido não encontrado.</div>
