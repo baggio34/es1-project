@@ -1,4 +1,3 @@
-// frontend/src/view_models/useDrivers.ts
 import { useState, useEffect, useCallback } from 'react'
 import { driverApi } from '../api/driverApi'
 import { ApiError } from '../api/client'
@@ -9,13 +8,21 @@ export function useDriver() {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Função para carregar a lista de motoristas do backend
+  // Função para carregar a lista de motoristas com suporte a Array ou Objeto do backend[cite: 3]
   const loadDrivers = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const data = await driverApi.getAll()
-      setDrivers(data)
+
+      let driverList: Driver[] = []
+      if (Array.isArray(data)) {
+        driverList = data
+      } else if (data && typeof data === 'object') {
+        driverList = Object.values(data)
+      }
+
+      setDrivers(driverList)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message)
@@ -27,12 +34,10 @@ export function useDriver() {
     }
   }, [])
 
-  // Carrega os dados na montagem do componente
   useEffect(() => {
     loadDrivers()
   }, [loadDrivers])
 
-  // Função para criar ou atualizar um motorista
   const saveDriver = async (data: DriverFormData, selectedId?: string | null) => {
     try {
       setError(null)
@@ -41,23 +46,22 @@ export function useDriver() {
       } else {
         await driverApi.create(data)
       }
-      await loadDrivers() // Recarrega a lista atualizada
+      await loadDrivers()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message)
       } else {
         setError('Erro ao salvar motorista.')
       }
-      throw err // Repassa o erro para o formulário tratar
+      throw err
     }
   }
 
-  // Função para deletar um motorista
   const deleteDriver = async (id: string) => {
     try {
       setError(null)
       await driverApi.delete(id)
-      await loadDrivers() // Recarrega a lista após exclusão
+      await loadDrivers()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message)

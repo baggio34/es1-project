@@ -3,17 +3,17 @@ import type { Vehicle, VehicleFormData } from '../models/vehicle'
 
 export const vehicleApi = {
   /**
-   * Busca a lista completa de veículos.
+   * Busca a lista completa de veículos[cite: 2].
    */
   getAll: () => apiFetch<Vehicle[]>('/vehicles'),
 
   /**
-   * Busca os detalhes de um veículo por ID.
+   * Busca os detalhes de um veículo por ID[cite: 2].
    */
   getById: (id: string) => apiFetch<Vehicle>(`/vehicles/${id}`),
 
   /**
-   * Cadastra um novo veículo.
+   * Cadastra um novo veículo[cite: 2].
    */
   create: (data: VehicleFormData) =>
     apiFetch<Vehicle>('/vehicles', {
@@ -22,7 +22,7 @@ export const vehicleApi = {
     }),
 
   /**
-   * Atualiza um veículo existente.
+   * Atualiza um veículo existente[cite: 2].
    */
   update: (id: string, data: VehicleFormData) =>
     apiFetch<Vehicle>(`/vehicles/${id}`, {
@@ -31,7 +31,7 @@ export const vehicleApi = {
     }),
 
   /**
-   * Remove um veículo do sistema.
+   * Remove um veículo do sistema[cite: 2].
    */
   delete: (id: string) =>
     apiFetch<void>(`/vehicles/${id}`, {

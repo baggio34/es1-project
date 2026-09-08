@@ -13,7 +13,20 @@ export function useOrder() {
       setLoading(true)
       setError(null)
       const data = await orderApi.getAll()
-      setOrders(data)
+
+      let orderList: Order[] = []
+
+      // Verifica se os dados vieram como Array nativo
+      if (Array.isArray(data)) {
+        orderList = data
+      } 
+      // Verifica se os dados vieram como o Objeto da sua imagem
+      else if (data && typeof data === 'object') {
+        // Object.values pega apenas o conteúdo de dentro das chaves, transformando em Array
+        orderList = Object.values(data)
+      }
+
+      setOrders(orderList)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message)

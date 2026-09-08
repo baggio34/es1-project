@@ -3,17 +3,17 @@ import type { Driver, DriverFormData } from '../models/driver'
 
 export const driverApi = {
   /**
-   * Busca a lista completa de motoristas.
+   * Busca a lista completa de motoristas[cite: 1].
    */
   getAll: () => apiFetch<Driver[]>('/drivers'),
 
   /**
-   * Busca os detalhes de um motorista por ID.
+   * Busca os detalhes de um motorista por ID[cite: 1].
    */
   getById: (id: string) => apiFetch<Driver>(`/drivers/${id}`),
 
   /**
-   * Cadastra um novo motorista.
+   * Cadastra um novo motorista[cite: 1].
    */
   create: (data: DriverFormData) =>
     apiFetch<Driver>('/drivers', {
@@ -22,7 +22,7 @@ export const driverApi = {
     }),
 
   /**
-   * Atualiza um motorista existente.
+   * Atualiza um motorista existente[cite: 1].
    */
   update: (id: string, data: DriverFormData) =>
     apiFetch<Driver>(`/drivers/${id}`, {
@@ -31,7 +31,7 @@ export const driverApi = {
     }),
 
   /**
-   * Remove um motorista do sistema.
+   * Remove um motorista do sistema[cite: 1].
    */
   delete: (id: string) =>
     apiFetch<void>(`/drivers/${id}`, {

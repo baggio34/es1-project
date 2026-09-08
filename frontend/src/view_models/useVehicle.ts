@@ -8,12 +8,21 @@ export function useVehicle() {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Função para carregar a lista de veículos com suporte a Array ou Objeto do backend[cite: 4]
   const loadVehicles = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const data = await vehicleApi.getAll()
-      setVehicles(data)
+
+      let vehicleList: Vehicle[] = []
+      if (Array.isArray(data)) {
+        vehicleList = data
+      } else if (data && typeof data === 'object') {
+        vehicleList = Object.values(data)
+      }
+
+      setVehicles(vehicleList)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message)
