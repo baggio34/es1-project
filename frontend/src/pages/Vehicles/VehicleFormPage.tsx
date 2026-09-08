@@ -118,6 +118,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                 Modelo / Fabricante
               </Label>
               <Input
+                autoComplete='off'
                 id="vehicle-model"
                 placeholder="Ex: Mercedes-Benz Sprinter 415 CDI"
                 value={model}
@@ -139,6 +140,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Placa (7 caracteres)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="vehicle-plate"
                   placeholder="Ex: ABC1D23"
                   maxLength={7}
@@ -160,6 +162,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Cor Predominante
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="vehicle-color"
                   placeholder="Ex: Branco, Azul, Prata"
                   value={color}
@@ -182,6 +185,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Volume Interno Útil (m³)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="vehicle-volume"
                   type="number"
                   step="0.1"
@@ -205,6 +209,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Carga Máxima Permitida (kg)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="vehicle-load"
                   type="number"
                   step="1"

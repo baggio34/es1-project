@@ -110,6 +110,7 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                 Nome Completo
               </Label>
               <Input
+                autoComplete='off'
                 id="driver-name"
                 placeholder="Ex: João da Silva"
                 value={name}
@@ -131,6 +132,7 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                   CPF (somente números)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="driver-cpf"
                   placeholder="Ex: 12345678901"
                   maxLength={14}

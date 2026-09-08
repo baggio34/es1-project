@@ -40,7 +40,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     if (!description.trim()) newErrors.description = 'A descrição do pedido é obrigatória.'
     if (!clientName.trim()) newErrors.clientName = 'O nome do cliente é obrigatório.'
     const cleanReg = clientReg.replace(/\D/g, '')
-    if (cleanReg.length !== 11 && cleanReg.length !== 11) newErrors.clientReg = 'Insira um CPF ou CNPJ válido.'
+    if (cleanReg.length !== 11 && cleanReg.length !== 14) newErrors.clientReg = 'Insira um CPF ou CNPJ válido.'
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
     if (Number(value) <= 0 || isNaN(Number(value))) newErrors.value = 'O valor deve ser maior que zero.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
@@ -113,6 +113,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                 Descrição dos Itens / Carga
               </Label>
               <Input
+                autoComplete='off'
                 id="order-description"
                 placeholder="Ex: Lote de Peças Automotivas e Rolamentos Industriais"
                 value={description}
@@ -134,6 +135,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   Nome do Cliente / Empresa
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="order-client"
                   placeholder="Ex: Indústria Catarinense S/A"
                   value={clientName}
@@ -154,6 +156,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   CPF ou CNPJ do Solicitante
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="order-client-reg"
                   placeholder="Ex: 111.222.333-44"
                   value={clientReg}
@@ -175,6 +178,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                 Endereço Completo de Destino
               </Label>
               <Input
+                autoComplete='off'
                 id="order-dest"
                 placeholder="Ex: Rua das Palmeiras, 1500 - Joinville/SC - CEP 89200-000"
                 value={destination}
@@ -196,6 +200,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   Valor Declarado (R$)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="order-value"
                   type="number"
                   step="0.01"
@@ -219,6 +224,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   Peso Total (kg)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="order-weight"
                   type="number"
                   step="0.1"
@@ -242,6 +248,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   Volume Útil (m³)
                 </Label>
                 <Input
+                  autoComplete='off'
                   id="order-volume"
                   type="number"
                   step="0.1"
