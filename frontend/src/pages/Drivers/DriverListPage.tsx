@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Eye, Pencil, Trash2 } from 'lucide-react'
-import { formatCpf, getDriverStatusBadge } from '../../utils/formatters.tsx'
+import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverListPageProps {
   drivers: Driver[]
@@ -109,7 +109,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
               return (
                 <TableRow key={driver.id}>
                   <TableCell style={{ fontWeight: 600 }}>{driver.name}</TableCell>
-                  <TableCell className="detail-value-mono">{formatCpf(driver.cpf)}</TableCell>
+                  <TableCell className="detail-value-mono">{formatReg(driver.cpf)}</TableCell>
                   <TableCell>{getDriverStatusBadge(driver.status)}</TableCell>
                   <TableCell>
                     {hasVehicle ? (
@@ -175,7 +175,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
       >
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
           Deseja realmente excluir o motorista{' '}
-          <strong>{driverToDelete?.name}</strong> (CPF: {driverToDelete ? formatCpf(driverToDelete.cpf) : ''})?
+          <strong>{driverToDelete?.name}</strong> (CPF: {driverToDelete ? formatReg(driverToDelete.cpf) : ''})?
         </p>
       </Modal>
     </div>

@@ -2,6 +2,8 @@
 **/package-lock.json
 **/.vscode
 
+backend/data/*.json
+
 frontend/logs
 frontend/*.log
 frontend/npm-debug.log*

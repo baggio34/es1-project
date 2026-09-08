@@ -14,7 +14,7 @@ export interface OrderBase {
   registeredOn: string
   description: string
   clientName: string
-  clientCpf: string
+  clientRegistration: string // CPF ou CNPJ
   destination: string
   value: number
   weight: number // kg
@@ -89,10 +89,10 @@ export type Order =
 export type OrderFormData = {
   description: string
   clientName: string
-  clientCpf: string
+  clientRegistration: string
   destination: string
   value: number
   weight: number
   volume: number
-  status?: OrderStatus
+  status: OrderStatus
 }

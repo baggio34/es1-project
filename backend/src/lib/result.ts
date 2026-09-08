@@ -11,6 +11,9 @@ class OkResult<T, E> {
   then<U>(fn: (val: T) => Result<U, E>): Result<U, E> {
     return fn(this.ok);
   }
+  unwrap(): T {
+    return this.ok
+  }
 }
 
 class ErrResult<T, E> {
@@ -23,6 +26,9 @@ class ErrResult<T, E> {
   }
   then<U>(_fn: (val: T) => Result<U, E>): Result<U, E> {
     return this as unknown as Result<U, E>;
+  }
+  unwrap(): T {
+    throw `ERROR: called unwrap on Err variant of Result type.\nValue of the error stores: '${this.err}'`
   }
 }
 

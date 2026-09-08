@@ -21,7 +21,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
 
   const [description, setDescription] = useState(initialOrder ? initialOrder.description : '')
   const [clientName, setClientName] = useState(initialOrder ? initialOrder.clientName : '')
-  const [clientCpf, setClientCpf] = useState(initialOrder ? initialOrder.clientCpf : '')
+  const [clientReg, setClientReg] = useState(initialOrder ? initialOrder.clientRegistration : '')
   const [destination, setDestination] = useState(initialOrder ? initialOrder.destination : '')
   const [value, setValue] = useState<number | string>(initialOrder ? initialOrder.value : '')
   const [weight, setWeight] = useState<number | string>(initialOrder ? initialOrder.weight : '')
@@ -39,8 +39,8 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     const newErrors: { [key: string]: string } = {}
     if (!description.trim()) newErrors.description = 'A descrição do pedido é obrigatória.'
     if (!clientName.trim()) newErrors.clientName = 'O nome do cliente é obrigatório.'
-    const cleanCpf = clientCpf.replace(/\D/g, '')
-    if (cleanCpf.length !== 11) newErrors.clientCpf = 'O CPF do cliente deve ter 11 dígitos.'
+    const cleanReg = clientReg.replace(/\D/g, '')
+    if (cleanReg.length !== 11 && cleanReg.length !== 11) newErrors.clientReg = 'Insira um CPF ou CNPJ válido.'
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
     if (Number(value) <= 0 || isNaN(Number(value))) newErrors.value = 'O valor deve ser maior que zero.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
@@ -57,7 +57,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
       await onSave({
         description: description.trim(),
         clientName: clientName.trim(),
-        clientCpf: cleanCpf,
+        clientRegistration: cleanReg,
         destination: destination.trim(),
         value: Number(value),
         weight: Number(weight),
@@ -92,13 +92,13 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
       <div style={{ maxWidth: '850px', margin: '0 auto' }}>
         <form onSubmit={handleSubmit}>
           {apiError && (
-            <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700">
+            <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700">
               <AlertCircle size={20} className="shrink-0" />
               <span className="text-sm font-medium">{apiError}</span>
             </div>
           )}
 
-          <div className="mb-8 pb-6 border-b border-slate-200">
+          <div className="mb-4 pb-6 border-b border-slate-200">
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
               {isEditing ? 'Informações do Pedido' : 'Dados Gerais do Pedido'}
             </h2>
@@ -107,7 +107,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
             </p>
           </div>
 
-          <div className="space-y-10">
+          <div className="space-y-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="order-description" required className="text-sm font-semibold text-slate-700">
                 Descrição dos Itens / Carga
@@ -150,23 +150,22 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="order-cpf" required className="text-sm font-semibold text-slate-700">
-                  CPF do Solicitante (11 dígitos)
+                <Label htmlFor="order-client-reg" required className="text-sm font-semibold text-slate-700">
+                  CPF ou CNPJ do Solicitante
                 </Label>
                 <Input
-                  id="order-cpf"
-                  placeholder="Ex: 11122233344"
-                  maxLength={14}
-                  value={clientCpf}
+                  id="order-client-reg"
+                  placeholder="Ex: 111.222.333-44"
+                  value={clientReg}
                   disabled={isSubmitting}
                   onChange={(e) => {
-                    setClientCpf(e.target.value)
-                    if (errors.clientCpf) setErrors((p) => ({ ...p, clientCpf: '' }))
+                    setClientReg(e.target.value)
+                    if (errors.clientReg) setErrors((p) => ({ ...p, clientReg: '' }))
                   }}
-                  error={errors.clientCpf}
+                  error={errors.clientReg}
                 />
-                {errors.clientCpf && (
-                  <span className="text-xs font-medium text-red-600">{errors.clientCpf}</span>
+                {errors.clientReg && (
+                  <span className="text-xs font-medium text-red-600">{errors.clientReg}</span>
                 )}
               </div>
             </div>

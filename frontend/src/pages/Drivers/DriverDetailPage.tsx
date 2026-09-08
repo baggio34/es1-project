@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { ArrowLeft, Pencil, User, Truck, Package } from 'lucide-react'
-import { formatCpf, getDriverStatusBadge } from '../../utils/formatters.tsx'
+import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverDetailPageProps {
   driver: Driver
@@ -56,7 +56,7 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
               </div>
               <div className="detail-item">
                 <span className="detail-label">CPF</span>
-                <span className="detail-value detail-value-mono">{formatCpf(driver.cpf)}</span>
+                <span className="detail-value detail-value-mono">{formatReg(driver.cpf)}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Status Operacional</span>

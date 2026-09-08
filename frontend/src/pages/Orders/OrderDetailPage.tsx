@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { ArrowLeft, Pencil, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
-import { formatCurrency, getOrderStatusBadge, formatCpf } from '../../utils/formatters.tsx'
+import { formatCurrency, getOrderStatusBadge, formatReg } from '../../utils/formatters.tsx'
 
 export interface OrderDetailPageProps {
   order: Order
@@ -183,7 +183,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
               </div>
               <div className="detail-item">
                 <span className="detail-label">CPF / CNPJ</span>
-                <span className="detail-value detail-value-mono">{formatCpf(order.clientCpf)}</span>
+                <span className="detail-value detail-value-mono">{formatReg(order.clientRegistration)}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Endereço de Entrega</span>

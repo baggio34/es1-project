@@ -89,13 +89,13 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
         <form onSubmit={handleSubmit}>
           {/* Banner para exibir erros vindos da API */}
           {apiError && (
-            <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700">
+            <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700">
               <AlertCircle size={20} className="shrink-0" />
               <span className="text-sm font-medium">{apiError}</span>
             </div>
           )}
 
-          <div className="mb-8 pb-6 border-b border-slate-200">
+          <div className="mb-4 pb-6 border-b border-slate-200">
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
               Dados Cadastrais do Condutor
             </h2>
@@ -104,7 +104,7 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             </p>
           </div>
 
-          <div className="space-y-10">
+          <div className="space-y-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="driver-name" required className="text-sm font-semibold text-slate-700">
                 Nome Completo
@@ -142,10 +142,8 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                   }}
                   error={errors.cpf}
                 />
-                {errors.cpf ? (
+                {errors.cpf && (
                   <span className="text-xs font-medium text-red-600">{errors.cpf}</span>
-                ) : (
-                  <span className="text-xs text-slate-400">Obrigatório 11 dígitos conforme validação da API.</span>
                 )}
               </div>
 
@@ -162,7 +160,6 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                     { value: 'onRoute', label: 'Em Rota' },
                   ]}
                 />
-                <span className="text-xs text-slate-400">Estado operacional inicial na frota.</span>
               </div>
             </div>
 

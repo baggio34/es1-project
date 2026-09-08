@@ -1,5 +1,5 @@
 import { drivers, getDriver } from "@/domain/employee_registration/driver_registration.ts"
-import { getOrder, orders } from "@/domain/order_processing/order_registration.ts"
+import { getOrder, orders, saveOrders } from "@/domain/order_processing/order_registration.ts"
 import { getVehicle, vehicles } from "@/domain/vehicle_registration/vehicle_registration.ts"
 import { type Result, Err, Ok } from "@/lib/result.ts"
 
@@ -20,6 +20,7 @@ export function loadOrder(id: string, driverId: string, vehicleId: string): Resu
             vehicles.set(vehicleId, { ...vehicle, status: 'waitingDispatch', driverId, orderIds: [id] })
           }
           orders.set(id, { ...order, status: 'waitingDispatch', vehicleId, driverId })
+          saveOrders()
           return Ok('ok')
         })))
 }
@@ -33,6 +34,7 @@ export function unloadOrder(id: string): Result<'ok', string> {
     vehicle.status == 'waitingDispatch' && vehicle.orderIds.removeOne(id)
 
     orders.set(id, { ...order, status: 'inPreparation' })
+    saveOrders()
     return Ok('ok')
   })
 }
@@ -44,6 +46,7 @@ export function shipOrder(id: string): Result<'ok', string> {
     vehicles.get(order.vehicleId)!.status = 'onRoute'
 
     orders.set(id, { ...order, status: 'onRoute' })
+    saveOrders()
     return Ok('ok')
   })
 }
@@ -55,6 +58,7 @@ export function confirmArrival(id: string): Result<'ok', string> {
     vehicles.get(order.vehicleId)!.status = 'free'
 
     orders.set(id, { ...order, status: 'arrived', arrivedOn: new Date(Date.now()).toISOString() })
+    saveOrders()
     return Ok('ok')
   })
 }

@@ -35,7 +35,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
       order.description.toLowerCase().includes(query) ||
       order.clientName.toLowerCase().includes(query) ||
       order.destination.toLowerCase().includes(query) ||
-      order.clientCpf.includes(searchTerm)
+      order.clientRegistration.includes(searchTerm)
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter
     return matchesSearch && matchesStatus
   })

@@ -6,6 +6,7 @@ import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
 import orderProcessingRouter from '@/endpoints/order_processing_endpoints.ts'
 import cors from '@fastify/cors'
+import editingRouter from './endpoints/editing_endpoints.ts'
 
 const app = fastify({
   logger: {
@@ -44,6 +45,7 @@ await app.register(fastifySwaggerUi, {
 await app.register(registrationRouter)
 await app.register(deletionRouter)
 await app.register(retrievalRouter)
+await app.register(editingRouter)
 await app.register(orderProcessingRouter)
 
 app.listen({ port: 3000 }, (err, _address) => {

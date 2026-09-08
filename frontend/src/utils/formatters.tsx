@@ -4,9 +4,14 @@ import type { VehicleStatus } from '../models/vehicle.ts'
 import type { OrderStatus } from '../models/order.ts'
 import { Badge } from '../components/ui/badge.tsx'
 
-export const formatCpf = (cpf: string): string => {
-  if (cpf.length !== 11) return cpf
-  return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`
+export const formatReg = (reg: string): string => {
+  if (reg.length == 11) {
+    return `${reg.slice(0, 3)}.${reg.slice(3, 6)}.${reg.slice(6, 9)}-${reg.slice(9)}`
+  }
+  if (reg.length == 14) {
+    return `${reg.slice(0, 2)}.${reg.slice(2, 5)}.${reg.slice(5, 8)}/${reg.slice(8, 12)}-${reg.slice(12)}`
+  }
+  return reg
 }
 
 export const formatCurrency = (val: number): string => {
