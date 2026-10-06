@@ -1,35 +1,26 @@
 import Type, { type Static } from 'typebox'
-
-// Será usado futuramente na máquina de estados do pedido.
-// const VehicleStatusSchema = Type.Union([
-//   Type.Object({ status: Type.Literal("free") }),
-//   Type.Object({
-//     status: Type.Literal("waitingDispatch"),
-//     driverId: Type.String({ format: 'uuid' }),
-//     orderIds: Type.Array(Type.String()),
-//   }),
-//   Type.Object({
-//     status: Type.Literal("onRoute"),
-//     driverId: Type.String({ format: 'uuid' }),
-//     orderIds: Type.Array(Type.String()),
-//   }),
-// ])
-
-const LegacyVehicleStatusSchema = Type.Union([
-  Type.Object({ status: Type.Literal("free") }),
-  Type.Object({ status: Type.Literal("waitingDispatch"), }),
-  Type.Object({ status: Type.Literal("onRoute"), }),
-])
+import { TransportationStatusSchema } from './driver.ts'
 
 export const VehicleSchema = Type.Intersect([
-  LegacyVehicleStatusSchema,
+  TransportationStatusSchema,
   Type.Object({
-    id: Type.String({ format: "uuid" }),
-    model: Type.String({ minLength: 1 }),
+    // A placa é o identificador do veículo.
     plate: Type.String({ minLength: 7, maxLength: 7 }),
-    color: Type.String({ minLength: 1 }),
+    model: Type.String({ minLength: 3 }),
+    color: Type.String({ minLength: 3 }),
+
+    // Volume interno em metros cúbicos.
     internalVolume: Type.Number({ minimum: 0 }),
+
+    // Carga máxima em kilogramas.
     maxLoad: Type.Number({ minimum: 0 }),
+
+    // Licenças necessárias para dirigir o veículo.
+    licenses: Type.Array(Type.String()),
+    condition: Type.Union([ Type.Literal('active'), Type.Literal('deactivated'), ]),
+
+    registeredOn: Type.String({ format: 'date-time' }),
+    registeredBy: Type.String(),
   })
 ])
 export type Vehicle = Static<typeof VehicleSchema>

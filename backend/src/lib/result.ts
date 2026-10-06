@@ -8,7 +8,7 @@ class OkResult<T, E> {
   map<U>(fn: (val: T) => U): Result<U, E> {
     return new OkResult<U, E>(fn(this.ok));
   }
-  then<U>(fn: (val: T) => Result<U, E>): Result<U, E> {
+  bind<U>(fn: (val: T) => Result<U, E>): Result<U, E> {
     return fn(this.ok);
   }
   unwrap(): T {
@@ -24,7 +24,7 @@ class ErrResult<T, E> {
   map<U>(_fn: (val: T) => U): Result<U, E> {
     return this as unknown as Result<U, E>;
   }
-  then<U>(_fn: (val: T) => Result<U, E>): Result<U, E> {
+  bind<U>(_fn: (val: T) => Result<U, E>): Result<U, E> {
     return this as unknown as Result<U, E>;
   }
   unwrap(): T {

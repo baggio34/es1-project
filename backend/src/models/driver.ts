@@ -1,32 +1,24 @@
 import Type, { type Static } from 'typebox'
 
-// Será usado futuramente para a máquina de estados do pedido
-// const DriverStatusSchema = Type.Union([
-//   Type.Object({ status: Type.Literal("free") }),
-//   Type.Object({
-//     status: Type.Literal("waitingDispatch"),
-//     vehicleId: Type.String({ format: 'uuid' }),
-//     orderIds: Type.Array(Type.String()),
-//   }),
-//   Type.Object({
-//     status: Type.Literal("onRoute"),
-//     vehicleId: Type.String({ format: 'uuid' }),
-//     orderIds: Type.Array(Type.String()),
-//   }),
-// ])
-// 
-const LegacyDriverStatusSchema = Type.Union([
-  Type.Object({ status: Type.Literal("free") }),
-  Type.Object({ status: Type.Literal("waitingDispatch"), }),
-  Type.Object({ status: Type.Literal("onRoute"), }),
-])
-
-export const DriverSchema = Type.Intersect([
-  LegacyDriverStatusSchema,
+export const TransportationStatusSchema = Type.Union([
   Type.Object({
-    id: Type.String({ format: "uuid" }),
-    name: Type.String({ minLength: 1 }),
-    cpf: Type.String({ maxLength: 11, minLength: 11 }),
-  })
+    status: Type.Literal('free')
+  }),
+  Type.Object({
+    status: Type.Union([
+      Type.Literal('waitingOperatorOrder'),
+      Type.Literal('readyToDispatch'),
+      Type.Literal('onRoute'),
+    ]),
+    routeId: Type.String(),
+  }),
 ])
-export type Driver = Static<typeof DriverSchema>
+export type TransportationStatus = Static<typeof TransportationStatusSchema>
+
+export const DriverRoleSchema = Type.Intersect([
+  Type.Object({
+    role: Type.Literal('driver'),
+    licenses: Type.Array(Type.String())
+  }),
+  TransportationStatusSchema,
+])

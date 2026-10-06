@@ -67,8 +67,8 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           <CardContent style={{ padding: '1.25rem 2rem' }}>
             <div className="order-timeline">
               {statusOrderList.map((step, idx) => {
-                const isCompleted = currentIndex > idx
-                const isCurrent = currentIndex === idx
+                const isCurrent = currentIndex == idx
+                const isCompleted = currentIndex > idx || (isCurrent && step.key == 'arrived')
                 return (
                   <div
                     key={step.key}

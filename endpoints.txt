@@ -1,0 +1,159 @@
+Endpoints:
+/users/
+	GET:
+		- Somente gerentes.
+		- Retorna todos os usuários.
+
+	register/
+		POST:
+			- Somente gerentes.
+			- registra um usuário.
+
+	login/
+		POST:
+			- Entra na conta.
+			- Retorna as informações do perfil + access token.
+			
+	:username/
+		GET:
+			- retorna as informações de um usuário
+			;; Se ele for um motorista vai retornar também as informções
+			;; de status.
+
+		PATCH:
+			- Somete gerentes.
+			- altera os dados da conta.
+
+/drivers/
+	GET:
+		- Para operadores.
+		- Retorna todos os motoristas.
+
+	:username/
+		routes/
+			GET:
+				- retorna todas as rotas de um motorista.
+
+/routes/
+	GET:
+		- Para operadores.
+		- retorna todas as rotas.
+
+	:uuid/
+		GET:
+			- Para atendentes e operadores.
+			- Para o motorista responsável pela entrega.
+			- Retorna informações de uma rota.
+			- Retorna informações sobre os pedidos contidos na rota.
+
+		authorize-dispatch/
+			POST:
+				- Para operadores, autoriza o motorista sair para entrega.
+
+		unauthorize-dispatch/
+			POST:
+				- Para operadores, desautoriza o motorista sair para entrega.
+
+		confirm-dispatch/
+			POST:
+				- Para motoristas, confirma a saida para entrega.
+		
+/orders/
+	POST:
+		- disponível para atendendes.
+		- cria um pedido.
+
+	GET:
+		- retorna todos os pedidos.
+		- visivel para atendentes e operadores.
+
+
+	:id/
+		GET:
+			- retorna as informações do pedido.
+			- visivel para atendentes e operadores.
+			- motoristas so podem ver pedidos relacionados a ele.
+
+		PATCH:
+			- disponível para gerentes.
+			- altera informações do pedido.
+
+		approve/
+			POST:
+				- Para operadores
+				- aprova o pedido.
+
+		reject/
+			POST:
+				- Para operadores
+				- rejeita o pedido.
+
+		confirm-payment/
+			POST:
+				- Para atendentes
+				- confirma o pagamento.
+
+		cancel/
+			POST:
+				- Para gerentes
+				- cancela o pedido.
+
+		load/
+			POST:
+				- Para operadores
+				- atribui o pedido a um motorista e veículo.
+		
+		unload/
+			POST:
+				- Para operadores
+				- desatribui o pedido a um motorista e veículo.
+
+		report-accident/
+			POST:
+				- Para motoristas
+				- informa um acidente ocorrido com um pedido durante a entrega.
+
+		resolve-accident/
+			POST:
+				- Para gerentes
+				- informa que um acidente foi resolvido.
+
+		confirm-arrival/
+			POST:
+				- Para motoristas
+				- informa que um pedido foi entregue.
+
+		suggested-routes/
+			GET:
+				- Para operadores
+				- retorna possiveis motoristas e veículos
+
+/vehicles/
+	GET:
+		- Para operadores.
+		- Retorna todos os veículos.
+
+	POST:
+		- Somente gerentes.
+		- registra um veículo.
+
+	:plate/
+		GET:
+			- retorna as informações de um veículo.
+
+		PATCH:
+			- Somente gerentes.
+			- altera os dados do veículo.
+
+/licenses/
+	GET:
+		- retorna todas as licenças.
+
+	POST:
+		- Para gerentes.
+		- Cadastra uma nova licença.
+
+	:slug/
+		DELETE:
+			- Para gerentes
+			- Deleta uma licença.
