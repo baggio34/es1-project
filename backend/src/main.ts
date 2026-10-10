@@ -1,12 +1,13 @@
-import deletionRouter from '@/endpoints/deletion_endpoints.ts'
-import registrationRouter from '@/endpoints/registration_endpoints.ts'
-import retrievalRouter from '@/endpoints/retrieval_endpoints.ts'
 import fastify from 'fastify'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
-import orderProcessingRouter from '@/endpoints/order_processing_endpoints.ts'
 import cors from '@fastify/cors'
-import editingRouter from './endpoints/editing_endpoints.ts'
+import userRouter from './endpoints/user.endpoints.ts'
+import vehicleRouter from './endpoints/vehicle.endpoints.ts'
+import licenseRouter from './endpoints/license.endpoints.ts'
+import orderRouter from './endpoints/order.endpoints.ts'
+import driverRouter from './endpoints/driver.endpoints.ts'
+import routeRouter from './endpoints/route.endpoints.ts'
 
 const app = fastify({
   logger: {
@@ -29,7 +30,7 @@ await app.register(fastifySwagger, {
   openapi: {
     info: {
       title: 'Backend',
-      version: '1.0.0'
+      version: '2.0.0'
     },
   }
 })
@@ -42,11 +43,12 @@ await app.register(fastifySwaggerUi, {
   }
 })
 
-await app.register(registrationRouter)
-await app.register(deletionRouter)
-await app.register(retrievalRouter)
-await app.register(editingRouter)
-await app.register(orderProcessingRouter)
+await app.register(userRouter)
+await app.register(vehicleRouter)
+await app.register(licenseRouter)
+await app.register(orderRouter)
+await app.register(driverRouter)
+await app.register(routeRouter)
 
 app.listen({ port: 3000 }, (err, _address) => {
   if (err) {

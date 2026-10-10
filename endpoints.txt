@@ -1,13 +1,15 @@
 OBS: gerentes podem executar todas as operações de atendentes e operadores.
+
 Endpoints:
 /users/
 	GET:
 		- Somente gerentes.
 		- Retorna todos os usuários.
 
-	POST:
-		- Somente gerentes.
-		- registra um usuário.
+	register/
+		POST:
+			- Somente gerentes.
+			- registra um usuário.
 
 	login/
 		POST:
@@ -18,7 +20,7 @@ Endpoints:
 		GET:
 			- retorna as informações de um usuário
 			;; Se ele for um motorista vai retornar também as informções
-			;; de status e da rota ativa.
+			;; de status.
 
 		PATCH:
 			- Somete gerentes.
