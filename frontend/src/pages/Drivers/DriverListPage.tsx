@@ -6,7 +6,7 @@ import { Badge } from '../../components/ui/badge.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
-import { Plus, Search, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverListPageProps {
@@ -15,6 +15,7 @@ export interface DriverListPageProps {
   onEdit: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
+  onReload: () => void
 }
 
 export const DriverListPage: React.FC<DriverListPageProps> = ({
@@ -23,6 +24,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
   onEdit,
   onCreate,
   onDelete,
+  onReload,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -46,6 +48,9 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
           </p>
         </div>
         <div className="page-actions">
+          <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
+            Recarregar
+          </Button>
           <Button icon={<Plus size={16} />} onClick={onCreate}>
             Novo Motorista
           </Button>

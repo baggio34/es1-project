@@ -4,7 +4,19 @@ import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
-import { ArrowLeft, Check, AlertCircle } from 'lucide-react'
+import { Badge } from '../../components/ui/badge.tsx'
+import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
+
+const AVAILABLE_LICENSES = [
+  'Carga Perigosa',
+  'Carga Refrigerada',
+  'Carga Viva',
+  'Carga Indivisível',
+  'Produtos Químicos',
+  'Inflamáveis',
+  'Medicamentos',
+  'Alimentos Perecíveis',
+]
 
 export interface DriverFormPageProps {
   initialDriver?: Driver | null
@@ -21,12 +33,27 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
 
   const [name, setName] = useState(initialDriver ? initialDriver.name : '')
   const [cpf, setCpf] = useState(initialDriver ? initialDriver.cpf : '')
+  const [username, setUsername] = useState(initialDriver ? initialDriver.username : '')
+  const [password, setPassword] = useState('')
+  const [licenses, setLicenses] = useState<string[]>(
+    initialDriver && initialDriver.licenses ? initialDriver.licenses : []
+  )
   const [status, setStatus] = useState<DriverStatus>(initialDriver ? initialDriver.status : 'free')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   
   // Novos estados para controlar o envio e erros da API
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  const handleAddLicense = (license: string) => {
+    if (!licenses.includes(license)) {
+      setLicenses((prev) => [...prev, license])
+    }
+  }
+
+  const handleRemoveLicense = (license: string) => {
+    setLicenses((prev) => prev.filter((l) => l !== license))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,6 +64,9 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
     if (!name.trim()) newErrors.name = 'O nome completo é obrigatório.'
     const cleanCpf = cpf.replace(/\D/g, '')
     if (cleanCpf.length !== 11) newErrors.cpf = 'O CPF deve conter exatamente 11 dígitos.'
+    if (!username.trim()) newErrors.username = 'O nome de usuário é obrigatório.'
+    if (!isEditing && !password.trim()) newErrors.password = 'A senha é obrigatória para novos motoristas.'
+    if (!isEditing && password.length > 0 && password.length < 6) newErrors.password = 'A senha deve ter pelo menos 6 caracteres.'
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -50,6 +80,9 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
       await onSave({
         name: name.trim(),
         cpf: cleanCpf,
+        username: username.trim(),
+        password: password || undefined,
+        licenses,
         status,
         vehicleId: initialDriver && 'vehicleId' in initialDriver ? initialDriver.vehicleId : undefined,
       })
@@ -79,7 +112,7 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             <p className="page-description">
               {isEditing
                 ? 'Atualize as informações cadastrais do motorista.'
-                : 'Preencha os dados abaixo para cadastrar um novo motorista no sistema.'}
+                : 'Preencha os dados abaixo para cadastrar um novo motorista no sistema. Será criada também a conta de acesso (usuário) do motorista.'}
             </p>
           </div>
         </div>
@@ -95,9 +128,10 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             </div>
           )}
 
+          {/* Seção: Dados Pessoais do Motorista */}
           <div className="mb-4 pb-6 border-b border-slate-200">
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
-              Dados Cadastrais do Condutor
+              Dados Pessoais do Condutor
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               Campos marcados com asterisco (*) são de preenchimento obrigatório.
@@ -126,43 +160,172 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
               )}
             </div>
 
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="driver-cpf" required className="text-sm font-semibold text-slate-700">
+                CPF (somente números)
+              </Label>
+              <Input
+                autoComplete='off'
+                id="driver-cpf"
+                placeholder="Ex: 12345678901"
+                maxLength={14}
+                value={cpf}
+                disabled={isSubmitting}
+                onChange={(e) => {
+                  setCpf(e.target.value)
+                  if (errors.cpf) setErrors((prev) => ({ ...prev, cpf: '' }))
+                }}
+                error={errors.cpf}
+              />
+              {errors.cpf && (
+                <span className="text-xs font-medium text-red-600">{errors.cpf}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Seção: Conta de Acesso (Usuário) */}
+          <div className="mb-4 pb-6 border-b border-slate-200" style={{ marginTop: '2rem' }}>
+            <h2 className="text-base font-semibold text-slate-800 tracking-tight">
+              Conta de Acesso (Usuário)
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Credenciais para o motorista acessar o sistema. O papel será automaticamente definido como "Motorista".
+            </p>
+          </div>
+
+          <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="driver-cpf" required className="text-sm font-semibold text-slate-700">
-                  CPF (somente números)
+                <Label htmlFor="driver-username" required className="text-sm font-semibold text-slate-700">
+                  Nome de Usuário (@)
                 </Label>
                 <Input
                   autoComplete='off'
-                  id="driver-cpf"
-                  placeholder="Ex: 12345678901"
-                  maxLength={14}
-                  value={cpf}
+                  id="driver-username"
+                  placeholder="Ex: joao.silva"
+                  value={username}
                   disabled={isSubmitting}
                   onChange={(e) => {
-                    setCpf(e.target.value)
-                    if (errors.cpf) setErrors((prev) => ({ ...prev, cpf: '' }))
+                    setUsername(e.target.value)
+                    if (errors.username) setErrors((prev) => ({ ...prev, username: '' }))
                   }}
-                  error={errors.cpf}
+                  error={errors.username}
                 />
-                {errors.cpf && (
-                  <span className="text-xs font-medium text-red-600">{errors.cpf}</span>
+                {errors.username && (
+                  <span className="text-xs font-medium text-red-600">{errors.username}</span>
                 )}
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="driver-status" className="text-sm font-semibold text-slate-700">Status Inicial</Label>
-                <Select
-                  id="driver-status"
-                  value={status}
+                <Label htmlFor="driver-password" required={!isEditing} className="text-sm font-semibold text-slate-700">
+                  {isEditing ? 'Nova Senha (deixe em branco para manter)' : 'Senha de Acesso'}
+                </Label>
+                <Input
+                  autoComplete='new-password'
+                  id="driver-password"
+                  type="password"
+                  placeholder={isEditing ? '••••••••' : 'Mínimo 6 caracteres'}
+                  value={password}
                   disabled={isSubmitting}
-                  onChange={(e) => setStatus(e.target.value as DriverStatus)}
-                  options={[
-                    { value: 'free', label: 'Disponível (Livre)' },
-                    { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-                    { value: 'onRoute', label: 'Em Rota' },
-                  ]}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    if (errors.password) setErrors((prev) => ({ ...prev, password: '' }))
+                  }}
+                  error={errors.password}
                 />
+                {errors.password && (
+                  <span className="text-xs font-medium text-red-600">{errors.password}</span>
+                )}
               </div>
+            </div>
+          </div>
+
+          {/* Seção: Licenças e Status */}
+          <div className="mb-4 pb-6 border-b border-slate-200" style={{ marginTop: '2rem' }}>
+            <h2 className="text-base font-semibold text-slate-800 tracking-tight">
+              Licenças e Status Operacional
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Gerencie as licenças do motorista e defina seu status inicial.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Gerenciamento de Licenças */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-semibold text-slate-700">
+                Licenças Atribuídas
+              </Label>
+              <p className="text-xs text-slate-500" style={{ marginTop: '-0.25rem' }}>
+                Licenças que habilitam o motorista para tipos específicos de transporte.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+                {licenses.map((license) => (
+                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                    {license}
+                    <X
+                      size={12}
+                      style={{ opacity: 0.7 }}
+                      onClick={() => handleRemoveLicense(license)}
+                    />
+                  </Badge>
+                ))}
+                {licenses.length === 0 && (
+                  <span className="text-xs text-slate-400">Nenhuma licença atribuída.</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <select
+                  id="driver-license-select"
+                  className="ui-select"
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '0.875rem',
+                    backgroundColor: 'var(--color-bg-card)',
+                  }}
+                  defaultValue=""
+                  disabled={isSubmitting}
+                >
+                  <option value="" disabled>Selecione uma licença para adicionar...</option>
+                  {AVAILABLE_LICENSES.filter((l) => !licenses.includes(l)).map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    const select = document.getElementById('driver-license-select') as HTMLSelectElement
+                    if (select?.value) {
+                      handleAddLicense(select.value)
+                      select.value = ''
+                    }
+                  }}
+                >
+                  Adicionar
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="driver-status" className="text-sm font-semibold text-slate-700">Status Inicial</Label>
+              <Select
+                id="driver-status"
+                value={status}
+                disabled={isSubmitting}
+                onChange={(e) => setStatus(e.target.value as DriverStatus)}
+                options={[
+                  { value: 'free', label: 'Disponível (Livre)' },
+                  { value: 'waitingDispatch', label: 'Aguardando Despacho' },
+                  { value: 'onRoute', label: 'Em Rota' },
+                ]}
+              />
             </div>
 
             {isEditing && initialDriver && (

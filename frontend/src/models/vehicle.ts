@@ -7,6 +7,7 @@ export interface VehicleBase {
   color: string
   internalVolume: number // m³
   maxLoad: number        // kg
+  requiredLicenses: string[] // licenças requeridas para operar o veículo
 }
 
 export interface VehicleFree extends VehicleBase {
@@ -16,6 +17,7 @@ export interface VehicleFree extends VehicleBase {
 export interface VehicleBusy extends VehicleBase {
   status: 'waitingDispatch' | 'onRoute'
   driverId: string
+  driverName?: string
   orderIds: string[]
 }
 
@@ -27,6 +29,7 @@ export type VehicleFormData = {
   color: string
   internalVolume: number
   maxLoad: number
+  requiredLicenses: string[]
   status: VehicleStatus
   driverId?: string
 }

@@ -4,7 +4,19 @@ import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
-import { ArrowLeft, Check, AlertCircle } from 'lucide-react'
+import { Badge } from '../../components/ui/badge.tsx'
+import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
+
+const AVAILABLE_LICENSES = [
+  'Carga Perigosa',
+  'Carga Refrigerada',
+  'Carga Viva',
+  'Carga Indivisível',
+  'Produtos Químicos',
+  'Inflamáveis',
+  'Medicamentos',
+  'Alimentos Perecíveis',
+]
 
 export interface VehicleFormPageProps {
   initialVehicle?: Vehicle | null
@@ -28,6 +40,9 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
   const [maxLoad, setMaxLoad] = useState<number | string>(
     initialVehicle ? initialVehicle.maxLoad : ''
   )
+  const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
+    initialVehicle && initialVehicle.requiredLicenses ? initialVehicle.requiredLicenses : []
+  )
   const [status, setStatus] = useState<VehicleStatus>(
     initialVehicle ? initialVehicle.status : 'free'
   )
@@ -35,6 +50,16 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  const handleAddLicense = (license: string) => {
+    if (!requiredLicenses.includes(license)) {
+      setRequiredLicenses((prev) => [...prev, license])
+    }
+  }
+
+  const handleRemoveLicense = (license: string) => {
+    setRequiredLicenses((prev) => prev.filter((l) => l !== license))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,6 +91,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
         color: color.trim(),
         internalVolume: Number(internalVolume),
         maxLoad: Number(maxLoad),
+        requiredLicenses,
         status,
         driverId: initialVehicle && 'driverId' in initialVehicle ? initialVehicle.driverId : undefined,
       })
@@ -226,6 +252,65 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                 {errors.maxLoad && (
                   <span className="text-xs font-medium text-red-600">{errors.maxLoad}</span>
                 )}
+              </div>
+            </div>
+
+            {/* Licenças Requeridas */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-semibold text-slate-700">
+                Licenças Requeridas
+              </Label>
+              <p className="text-xs text-slate-500" style={{ marginTop: '-0.25rem' }}>
+                Licenças que o motorista deve possuir para operar este veículo.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+                {requiredLicenses.map((license) => (
+                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                    {license}
+                    <X
+                      size={12}
+                      style={{ opacity: 0.7 }}
+                      onClick={() => handleRemoveLicense(license)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <select
+                  id="vehicle-license-select"
+                  className="ui-select"
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '0.875rem',
+                    backgroundColor: 'var(--color-bg-card)',
+                  }}
+                  defaultValue=""
+                  disabled={isSubmitting}
+                >
+                  <option value="" disabled>Selecione uma licença...</option>
+                  {AVAILABLE_LICENSES.filter((l) => !requiredLicenses.includes(l)).map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    const select = document.getElementById('vehicle-license-select') as HTMLSelectElement
+                    if (select?.value) {
+                      handleAddLicense(select.value)
+                      select.value = ''
+                    }
+                  }}
+                >
+                  Adicionar
+                </Button>
               </div>
             </div>
 

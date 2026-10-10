@@ -1,0 +1,102 @@
+1. Tela de login: (ACESSÍVEL PARA TODOS)
+	- Usuário é redirecionado a essa tela se não houver um token de acesso salvo.
+	- Vai possuir campos de nome de usuário e senha, e um botão para acessar a conta.
+	- Fazer a requisição para `/users/login` com as informações inseridas.
+
+2. Tela de todos os pedidos: (OPERADORES, ATENDENTES, GERENTES)
+	- Receber os pedidos em `/orders`.
+	- Deve ter uma tabela com todos os pedidos cadastrados.
+	- Deve ter um botão para recarregar os pedidos.
+	- Deve ter uma opção de filtrar os pedidos (filtrar no front).
+
+	ATENDENTES E GERENTES: 
+		- Deve ter uma opção para criar pedidos. (para criar pode ser um diálogo ou tela separada).
+		- Poderá escolher as licensas do pedido `/licenses`
+		- Para pedidos que estão aguardando pagamento, deve ter a opção de marcar o
+		  pagamento como efetuado.
+
+	OPERADORES E GERENTES:
+		- Deve ter uma opção para:
+			- Aprovar ou reprovar um pedido aguardando aceitação (`/orders/:id/approve` e `/orders/:id/reject`).
+			- Carregar um pedido em preparação. (`/orders/:id/load`)
+			- Descarregar um pedido carregado. (`/orders/:id/unload`)
+		- Na criação de pedidos, também poderá adicionar ou remover licensas `/licenses` e `/licenses/:slug`
+
+	GERENTES:
+		- Deve ter uma opção para:
+			- Cancelar um pedido que não esteja cancelado ou entregue. (`/orders/:id/cancel`)
+			- Resolver um acidente de um pedido acidentado. (`/orders/:id/resolve-accident`)
+
+3. Tela de rotas de entregas: (OPERADORES, GERENTES)
+	- Mostra uma tabela com todas as rotas, seus status e a quantidade de pedidos concluidos (`/routes`).
+	- Deve ter a opção de filtrar as rotas por status.
+	- Deve ter a opção de recagerrar as rotas.
+	- Deve ter uma opção para:
+		- autorizar rotas esperando sinal do operador (`/routes/:uuid/authorize-dispatch`)
+		- desautorizar rotas autorizadas (`/routes/:uuid/unauthorize-dispatch`)
+
+4. Tela de rotas do motorista: (MOTORISTAS)
+	- Mostra na parte superior a rota atual sendo executada pelo motorista (se houver). em `/drivers/:username/routes`
+		- Mostrar a coleção de pedidos fazendo parte da rota atual, com marcação especial para aqueles
+		  que já foram entregues.
+		- Opção de informar que foi começado o percurso para uma rota que foi autorizada. `/routes/:uuid/confirm-dispatch`
+		- Opção de marcar cada pedido como entregue individualmente, quando a rota estiver em curso.
+		  `/orders/:id/confirm-arrival`
+		- Opção de marcar um pedido como acidentado quando a rota estiver em curso.
+		  `/orders/:id/report-accident`
+	- Embaixo mostra uma tabela com todas as rotas previamente executadas.
+
+5. Tela de detalhes de um pedido: (TODAS OS CARGOS)
+	- `/orders/:id`
+	- Deve mostrar uma linha do tempo dos estados dos pedidos, com o timestamp de cada estado.
+	- Deve permitir as ações sobre o pedido que eram possíveis de ser feitas nas outras telas. 
+	- Deve mostrar todas as informações do pedidos.
+	- Deve ter uma opção de ir para os detalhes da rota a qual pertence.
+
+6. Tela de detalhes da rota: (TODAS OS CARGOS)
+	- `/routes/:uuid`
+	- Deve mostrar uma linha do tempo dos estados dos pedidos, com o timestamp de cada estado.
+	- Deve mostrar todas as informações da rota.
+	- Deve mostrar os pedidos pertencentes e se eles já foram entregues.
+	- Deve ter uma opção de ir para os detalhes dos pedidos.
+	- Deve ter uma opção de ir para os detalhes do motorista.
+	- Deve ter uma opção de ir para os detalhes do veículo.
+
+7. Tela de usuários: (GERENTES)
+	- `/users`
+	- Mostra uma tabela com todos os usuários.
+	- Botão para recarregar os usuários.
+	- Botão para adicionar usuários.
+		- Na hora de escolher o cargo do usuário, se o registrador foi um ADMIN, ele poderá
+		  cadastrar outros GERENTES ou ADMINS.
+		- Poderá escolher as licensas do usuário se esse for motorista `/licenses`
+			- Também poderá adicionar ou remover licensas `/licenses` e `/licenses/:slug`
+	- Botão para editar usuários.
+	
+8. Tela de motoristas: (OPERADORES)
+	- `/drivers`
+	- Mostra uma tabela com todos os motoristas.
+	- Botão para recarregar os motoristas.
+	- Filtrar os motoristas pelo status.
+	
+9. Tela de veículos: (OPERADORES e GERENTES)
+	- `/vehicles`
+	- Mostra uma tabela com todos os veículos.
+	- Botão para recarregar os veículos.
+	- Filtrar os veículos pelo status.
+
+	GERENTES:
+		- Botão para adicionar veículo.
+		- Opção para editar veículo.
+		- Poderá escolher as licensas do veículo `/licenses`
+	
+10. Tela de detalhes de um usuário: (TODOS OS CARGOS)
+	- `/users/:username`
+	- Mostra informações sobre o usuário.
+	- Se for um motorista, também mostra o seu status e se houver, sua rota associada
+	  (permitindo navegar a ela).
+
+11. Tela de detalhes de um veículo: (TODOS OS CARGOS)
+	- `/vehicles/:plate`
+	- Mostra informações sobre o veículo.
+	- Também mostra o seu status e se houver, sua rota associada (permitindo navegar a ela).

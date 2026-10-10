@@ -3,22 +3,25 @@ import type { Driver } from '../../models/driver.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
-import { ArrowLeft, Pencil, User, Truck, Package } from 'lucide-react'
+import { ArrowLeft, Pencil, User, Truck, Package, Map } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverDetailPageProps {
   driver: Driver
   onBack: () => void
   onEdit: (id: string) => void
+  onViewRoute?: (routeId: string) => void
 }
 
 export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
   driver,
   onBack,
   onEdit,
+  onViewRoute,
 }) => {
   const hasVehicle = 'vehicleId' in driver && driver.vehicleId
   const orderIds = 'orderIds' in driver ? driver.orderIds : []
+  const routeId = 'routeId' in driver ? driver.routeId : undefined
 
   return (
     <div>
@@ -78,6 +81,11 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
               <Truck size={18} color="var(--color-primary)" />
               <CardTitle>Alocação de Transporte</CardTitle>
             </div>
+            {routeId && (
+              <Button variant="ghost" size="sm" icon={<Map size={14} />} onClick={() => onViewRoute?.(routeId)}>
+                Ver Rota Atual
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {hasVehicle ? (

@@ -3,22 +3,28 @@ import type { Vehicle } from '../../models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
-import { ArrowLeft, Pencil, Truck, Box, Shield } from 'lucide-react'
+import { Badge } from '../../components/ui/badge.tsx'
+import { ArrowLeft, Pencil, Truck, Box, Shield, Map } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 
 export interface VehicleDetailPageProps {
   vehicle: Vehicle
   onBack: () => void
   onEdit: (id: string) => void
+  onViewRoute?: (routeId: string) => void
 }
 
 export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   vehicle,
   onBack,
   onEdit,
+  onViewRoute,
 }) => {
   const hasDriver = 'driverId' in vehicle && vehicle.driverId
+  const driverName = 'driverName' in vehicle ? vehicle.driverName : undefined
   const orderIds = 'orderIds' in vehicle ? vehicle.orderIds : []
+  const routeId = 'routeId' in vehicle ? vehicle.routeId : undefined
+  const requiredLicenses = vehicle.requiredLicenses || []
 
   return (
     <div>
@@ -80,16 +86,22 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                   {vehicle.maxLoad.toLocaleString('pt-BR')} kg
                 </span>
               </div>
-              <div className="detail-item">
+              <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                 <span className="detail-label">Volume Interno Útil</span>
                 <span className="detail-value" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
                   {vehicle.internalVolume} m³
                 </span>
               </div>
-              <div className="detail-item">
-                <span className="detail-label">Tipo de Chassi</span>
-                <span className="detail-value">Utilitário / Carga Pesada</span>
-              </div>
+              {requiredLicenses.length > 0 && (
+                <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                  <span className="detail-label">Licenças Requeridas</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
+                    {requiredLicenses.map((lic) => (
+                      <Badge key={lic} variant="secondary">{lic}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -100,14 +112,22 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
               <Shield size={18} color="var(--color-primary)" />
               <CardTitle>Operação e Alocação</CardTitle>
             </div>
+            {routeId && (
+              <Button variant="ghost" size="sm" icon={<Map size={14} />} onClick={() => onViewRoute?.(routeId)}>
+                Ver Rota Atual
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {hasDriver ? (
               <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <div className="detail-item">
-                  <span className="detail-label">Motorista Alocado (ID)</span>
-                  <span className="detail-value detail-value-mono">
-                    {vehicle.driverId}
+                  <span className="detail-label">Motorista Alocado</span>
+                  <span className="detail-value">
+                    {driverName || 'Nome indisponível'}
+                  </span>
+                  <span className="detail-value detail-value-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                    ID: {vehicle.driverId}
                   </span>
                 </div>
                 <div className="detail-item">

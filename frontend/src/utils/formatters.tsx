@@ -2,6 +2,8 @@ import React from 'react'
 import type { DriverStatus } from '../models/driver.ts'
 import type { VehicleStatus } from '../models/vehicle.ts'
 import type { OrderStatus } from '../models/order.ts'
+import type { RouteStatus } from '../models/route.ts'
+import type { UserRole } from '../models/user.ts'
 import { Badge } from '../components/ui/badge.tsx'
 
 export const formatReg = (reg: string): string => {
@@ -66,5 +68,33 @@ export const getOrderStatusBadge = (status: OrderStatus): React.ReactElement => 
       return <Badge variant="success">Acidente Resolvido</Badge>
     default:
       return <Badge variant="secondary">{status}</Badge>
+  }
+}
+
+export const getRouteStatusBadge = (status: RouteStatus): React.ReactElement => {
+  switch (status) {
+    case 'waitingDispatch':
+      return <Badge variant="warning">Aguardando Despacho</Badge>
+    case 'onCourse':
+      return <Badge variant="primary">Em Curso</Badge>
+    case 'completed':
+      return <Badge variant="success">Concluída</Badge>
+    default:
+      return <Badge variant="secondary">{status}</Badge>
+  }
+}
+
+export const getUserRoleBadge = (role: UserRole): React.ReactElement => {
+  switch (role) {
+    case 'Admin':
+      return <Badge variant="danger">Administrador</Badge>
+    case 'Manager':
+      return <Badge variant="primary">Gerente</Badge>
+    case 'Clerk':
+      return <Badge variant="warning">Atendente</Badge>
+    case 'Driver':
+      return <Badge variant="secondary">Motorista</Badge>
+    default:
+      return <Badge variant="secondary">{role}</Badge>
   }
 }

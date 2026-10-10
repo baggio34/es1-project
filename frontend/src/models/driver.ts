@@ -4,6 +4,8 @@ export interface DriverBase {
   id: string
   name: string
   cpf: string
+  username: string
+  licenses: string[]
 }
 
 export interface DriverFree extends DriverBase {
@@ -21,6 +23,9 @@ export type Driver = DriverFree | DriverBusy
 export type DriverFormData = {
   name: string
   cpf: string
+  username: string
+  password?: string
+  licenses: string[]
   status: DriverStatus
   vehicleId?: string
 }

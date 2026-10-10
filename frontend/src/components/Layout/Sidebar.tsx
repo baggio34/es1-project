@@ -1,11 +1,9 @@
 import React from 'react'
-import { Package, Truck, Users, ShieldCheck } from 'lucide-react'
-
-export type DomainType = 'orders' | 'vehicles' | 'drivers'
+import { Link, useLocation } from 'react-router-dom'
+import { Package, Truck, Users, ShieldCheck, Map, UserCog, Navigation } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 export interface SidebarProps {
-  currentDomain: DomainType
-  onSelectDomain: (domain: DomainType) => void
   counts?: {
     orders: number
     vehicles: number
@@ -13,27 +11,59 @@ export interface SidebarProps {
   }
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  currentDomain,
-  onSelectDomain,
-}) => {
+export const Sidebar: React.FC<SidebarProps> = () => {
+  const location = useLocation()
+  const path = location.pathname
+
+  const { user } = useAuth();
   const navItems = [
     {
-      id: 'orders' as DomainType,
+      id: 'orders',
+      path: '/orders',
       label: 'Gerenciar Pedidos',
       icon: <Package size={18} />,
+      allowedRoles: ['Admin', 'Manager', 'Clerk'],
     },
     {
-      id: 'vehicles' as DomainType,
+      id: 'vehicles',
+      path: '/vehicles',
       label: 'Gerenciar Frota',
       icon: <Truck size={18} />,
+      allowedRoles: ['Admin', 'Manager'],
     },
     {
-      id: 'drivers' as DomainType,
+      id: 'drivers',
+      path: '/drivers',
       label: 'Gerenciar Motoristas',
       icon: <Users size={18} />,
+      allowedRoles: ['Admin', 'Manager'],
     },
-  ]
+    {
+      id: 'routes',
+      path: '/routes',
+      label: 'Gerenciar Rotas',
+      icon: <Map size={18} />,
+      allowedRoles: ['Admin', 'Manager'],
+    },
+    {
+      id: 'driver-routes',
+      path: '/driver-routes',
+      label: 'Minhas Rotas (Motorista)',
+      icon: <Navigation size={18} />,
+      allowedRoles: ['Driver', 'Admin', 'Manager'],
+    },
+    {
+      id: 'users',
+      path: '/users',
+      label: 'Gerenciar Usuários',
+      icon: <UserCog size={18} />,
+      allowedRoles: ['Admin', 'Manager'],
+    },
+  ];
+  // Filter items based on the current user's role
+  const filteredNavItems = navItems.filter(item =>
+    item.allowedRoles.includes(user?.role as any)
+  );
 
   return (
     <aside className="app-sidebar">
@@ -47,20 +77,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item) => {
-          const isActive = currentDomain === item.id
+        {filteredNavItems.map((item) => {
+          const isActive = path.startsWith(item.path);
           return (
-            <div
+            <Link
               key={item.id}
+              to={item.path}
               className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectDomain(item.id)}
+              style={{ textDecoration: 'none' }}
             >
               <div className="sidebar-nav-left">
                 {item.icon}
                 <span>{item.label}</span>
               </div>
-            </div>
-          )
+            </Link>
+          );
         })}
       </nav>
 

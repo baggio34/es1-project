@@ -4,13 +4,25 @@ import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
-import { ArrowLeft, Check, AlertCircle } from 'lucide-react'
+import { Badge } from '../../components/ui/badge.tsx'
+import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
 
 export interface OrderFormPageProps {
   initialOrder?: Order | null
   onSave: (data: OrderFormData) => Promise<void>
   onCancel: () => void
 }
+
+const AVAILABLE_LICENSES = [
+  'Carga Perigosa',
+  'Carga Refrigerada',
+  'Carga Viva',
+  'Carga Indivisível',
+  'Produtos Químicos',
+  'Inflamáveis',
+  'Medicamentos',
+  'Alimentos Perecíveis',
+]
 
 export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   initialOrder,
@@ -23,14 +35,28 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   const [clientName, setClientName] = useState(initialOrder ? initialOrder.clientName : '')
   const [clientReg, setClientReg] = useState(initialOrder ? initialOrder.clientRegistration : '')
   const [destination, setDestination] = useState(initialOrder ? initialOrder.destination : '')
-  const [value, setValue] = useState<number | string>(initialOrder ? initialOrder.value : '')
   const [weight, setWeight] = useState<number | string>(initialOrder ? initialOrder.weight : '')
   const [volume, setVolume] = useState<number | string>(initialOrder ? initialOrder.volume : '')
+  const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
+    initialOrder && initialOrder.requiredLicenses ? initialOrder.requiredLicenses : []
+  )
   const [status, setStatus] = useState<OrderStatus>(initialOrder ? initialOrder.status : 'pendingApproval')
+  // motivo da rejeição – obrigatório quando status for 'rejected'
+  const [reason, setReason] = useState<string>(initialOrder && (initialOrder as any).status === 'rejected' ? (initialOrder as any).reason || '' : '')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  const handleAddLicense = (license: string) => {
+    if (!requiredLicenses.includes(license)) {
+      setRequiredLicenses((prev) => [...prev, license])
+    }
+  }
+
+  const handleRemoveLicense = (license: string) => {
+    setRequiredLicenses((prev) => prev.filter((l) => l !== license))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,9 +68,9 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     const cleanReg = clientReg.replace(/\D/g, '')
     if (cleanReg.length !== 11 && cleanReg.length !== 14) newErrors.clientReg = 'Insira um CPF ou CNPJ válido.'
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
-    if (Number(value) <= 0 || isNaN(Number(value))) newErrors.value = 'O valor deve ser maior que zero.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
     if (Number(volume) <= 0 || isNaN(Number(volume))) newErrors.volume = 'O volume deve ser maior que zero.'
+    if (status === 'rejected' && !reason?.trim()) newErrors.reason = 'Informe o motivo da rejeição.'
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -59,10 +85,12 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
         clientName: clientName.trim(),
         clientRegistration: cleanReg,
         destination: destination.trim(),
-        value: Number(value),
         weight: Number(weight),
         volume: Number(volume),
+        requiredLicenses,
         status,
+        // inclui motivo apenas se o status for rejeitado
+        ...(status === 'rejected' ? { reason: reason.trim() } : {}),
       })
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o pedido. Tente novamente.')
@@ -194,31 +222,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-7">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="order-value" required className="text-sm font-semibold text-slate-700">
-                  Valor Declarado (R$)
-                </Label>
-                <Input
-                  autoComplete='off'
-                  id="order-value"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Ex: 12500.00"
-                  value={value}
-                  disabled={isSubmitting}
-                  onChange={(e) => {
-                    setValue(e.target.value)
-                    if (errors.value) setErrors((p) => ({ ...p, value: '' }))
-                  }}
-                  error={errors.value}
-                />
-                {errors.value && (
-                  <span className="text-xs font-medium text-red-600">{errors.value}</span>
-                )}
-              </div>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="order-weight" required className="text-sm font-semibold text-slate-700">
                   Peso Total (kg)
@@ -268,6 +272,65 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               </div>
             </div>
 
+            {/* Licenças Requeridas */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-semibold text-slate-700">
+                Licenças Requeridas para Transporte
+              </Label>
+              <p className="text-xs text-slate-500" style={{ marginTop: '-0.25rem' }}>
+                Selecione as licenças especiais que o motorista deve possuir para transportar esta carga.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+                {requiredLicenses.map((license) => (
+                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                    {license}
+                    <X
+                      size={12}
+                      style={{ opacity: 0.7 }}
+                      onClick={() => handleRemoveLicense(license)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <select
+                  id="order-license-select"
+                  className="ui-select"
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    fontSize: '0.875rem',
+                    backgroundColor: 'var(--color-bg-card)',
+                  }}
+                  defaultValue=""
+                  disabled={isSubmitting}
+                >
+                  <option value="" disabled>Selecione uma licença para adicionar...</option>
+                  {AVAILABLE_LICENSES.filter((l) => !requiredLicenses.includes(l)).map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    const select = document.getElementById('order-license-select') as HTMLSelectElement
+                    if (select?.value) {
+                      handleAddLicense(select.value)
+                      select.value = ''
+                    }
+                  }}
+                >
+                  Adicionar
+                </Button>
+              </div>
+            </div>
+
             {isEditing && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="order-status" className="text-sm font-semibold text-slate-700">
@@ -288,6 +351,28 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     { value: 'rejected', label: 'Rejeitado' },
                   ]}
                 />
+                {/* Campo de motivo, exibido apenas quando status = 'rejected' */}
+                {status === 'rejected' && (
+                  <div className="flex flex-col gap-2 mt-4">
+                    <Label htmlFor="order-reason" required className="text-sm font-semibold text-slate-700">
+                      Motivo da Rejeição
+                    </Label>
+                    <Input
+                      id="order-reason"
+                      placeholder="Descreva o motivo da rejeição"
+                      value={reason}
+                      disabled={isSubmitting}
+                      onChange={(e) => {
+                        setReason(e.target.value)
+                        if (errors.reason) setErrors((p) => ({ ...p, reason: '' }))
+                      }}
+                      error={errors.reason}
+                    />
+                    {errors.reason && (
+                      <span className="text-xs font-medium text-red-600">{errors.reason}</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

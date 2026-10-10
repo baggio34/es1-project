@@ -12,13 +12,14 @@ export type OrderStatus =
 export interface OrderBase {
   id: string
   registeredOn: string
+  registeredBy: string
   description: string
   clientName: string
   clientRegistration: string // CPF ou CNPJ
   destination: string
-  value: number
   weight: number // kg
   volume: number // m³
+  requiredLicenses: string[]
 }
 
 export interface OrderPendingApproval extends OrderBase {
@@ -27,40 +28,75 @@ export interface OrderPendingApproval extends OrderBase {
 
 export interface OrderWaitingPayment extends OrderBase {
   status: 'waitingPayment'
+  approvedOn?: string
+  approvedBy?: string
 }
 
 export interface OrderInPreparation extends OrderBase {
   status: 'inPreparation'
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
 }
 
 export interface OrderWaitingDispatch extends OrderBase {
   status: 'waitingDispatch'
   driverId: string
   vehicleId: string
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
+  loadedOn?: string
+  loadedBy?: string
 }
 
 export interface OrderOnRoute extends OrderBase {
   status: 'onRoute'
   driverId: string
   vehicleId: string
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
+  loadedOn?: string
+  loadedBy?: string
+  routeId?: string
 }
 
 export interface OrderArrived extends OrderBase {
   status: 'arrived'
   driverId: string
   vehicleId: string
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
+  loadedOn?: string
+  loadedBy?: string
+  routeId?: string
   arrivedOn: string
 }
 
 export interface OrderRejected extends OrderBase {
   status: 'rejected'
   reason: string
+  rejectedOn?: string
+  rejectedBy?: string
 }
 
 export interface OrderAccident extends OrderBase {
   status: 'accident'
   driverId: string
   vehicleId: string
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
+  loadedOn?: string
+  loadedBy?: string
+  routeId?: string
   accidentMessage: string
   accidentTime: string
 }
@@ -69,6 +105,13 @@ export interface OrderResolvedAccident extends OrderBase {
   status: 'resolvedAccident'
   driverId: string
   vehicleId: string
+  approvedOn?: string
+  approvedBy?: string
+  paymentConfirmedOn?: string
+  paymentConfirmedBy?: string
+  loadedOn?: string
+  loadedBy?: string
+  routeId?: string
   accidentMessage: string
   accidentTime: string
   resolvedOn: string
@@ -91,8 +134,8 @@ export type OrderFormData = {
   clientName: string
   clientRegistration: string
   destination: string
-  value: number
   weight: number
   volume: number
+  requiredLicenses: string[]
   status: OrderStatus
 }

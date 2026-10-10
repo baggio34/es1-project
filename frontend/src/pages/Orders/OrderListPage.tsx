@@ -5,7 +5,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
-import { Plus, Search, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { formatCurrency, getOrderStatusBadge } from '../../utils/formatters.tsx'
 
 export interface OrderListPageProps {
@@ -14,6 +14,7 @@ export interface OrderListPageProps {
   onEdit: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
+  onReload: () => void
 }
 
 export const OrderListPage: React.FC<OrderListPageProps> = ({
@@ -22,6 +23,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
   onEdit,
   onCreate,
   onDelete,
+  onReload,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -50,6 +52,9 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
           </p>
         </div>
         <div className="page-actions">
+          <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
+            Recarregar
+          </Button>
           <Button icon={<Plus size={16} />} onClick={onCreate}>
             Novo Pedido
           </Button>
@@ -93,19 +98,18 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[110px]">Código</TableHead>
-            <TableHead className="min-w-[200px]">Descrição da Carga</TableHead>
-            <TableHead className="min-w-[160px]">Cliente Solicitante</TableHead>
-            <TableHead className="min-w-[180px]">Destino</TableHead>
-            <TableHead className="min-w-[120px]">Valor Total</TableHead>
-            <TableHead className="min-w-[130px]">Peso / Volume</TableHead>
-            <TableHead className="min-w-[140px]">Status</TableHead>
-            <TableHead className="w-[110px]" style={{ textAlign: 'right' }}>Ações</TableHead>
+            <TableHead className="min-w-[210px]">Descrição da Carga</TableHead>
+            <TableHead className="min-w-[170px]">Cliente Solicitante</TableHead>
+            <TableHead className="min-w-[190px]">Destino</TableHead>
+            <TableHead className="min-w-[140px]">Peso / Volume</TableHead>
+            <TableHead className="min-w-[150px]">Status</TableHead>
+            <TableHead className="w-[120px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredOrders.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} style={{ textAlign: 'center', padding: '2.5rem' }}>
+              <TableCell colSpan={7} style={{ textAlign: 'center', padding: '2.5rem' }}>
                 <span style={{ color: 'var(--color-text-muted)' }}>
                   Nenhum pedido localizado com os filtros informados.
                 </span>
@@ -131,7 +135,6 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                 <TableCell style={{ maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={order.destination}>
                   {order.destination}
                 </TableCell>
-                <TableCell style={{ fontWeight: 600 }}>{formatCurrency(order.value)}</TableCell>
                 <TableCell style={{ color: 'var(--color-text-secondary)' }}>
                   {order.weight} kg • {order.volume} m³
                 </TableCell>

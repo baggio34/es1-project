@@ -5,7 +5,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
-import { Plus, Search, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 
 export interface VehicleListPageProps {
@@ -14,6 +14,7 @@ export interface VehicleListPageProps {
   onEdit: (id: string) => void
   onCreate: () => void
   onDelete: (id: string) => void
+  onReload: () => void
 }
 
 export const VehicleListPage: React.FC<VehicleListPageProps> = ({
@@ -22,6 +23,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
   onEdit,
   onCreate,
   onDelete,
+  onReload,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -45,6 +47,9 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
           </p>
         </div>
         <div className="page-actions">
+          <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
+            Recarregar
+          </Button>
           <Button icon={<Plus size={16} />} onClick={onCreate}>
             Novo Veículo
           </Button>
