@@ -36,12 +36,14 @@ class LicenseManager {
     const slug = slugify(name)
     if (this.licenses.has(slug)) return Err('alreadyExists')
     this.licenses.set(slug, name)
+    this.saveLicenses()
     return Ok(slug)
   }
 
   public delete(slug: string): Result<'deleted', 'noSuchLicense'> {
     if (!this.licenses.has(slug)) return Err('noSuchLicense')
     this.licenses.delete(slug)
+    this.saveLicenses()
     return Ok('deleted')
   }
 }
