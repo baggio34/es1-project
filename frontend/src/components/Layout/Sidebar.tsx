@@ -44,7 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       id: 'routes',
       path: '/routes',
       label: 'Gerenciar Rotas',
-      icon: <Map size={18} />,
+      icon: <Map size={18} /> ,
       allowedRoles: ['admin', 'manager', 'operator'],
     },
     {
@@ -52,7 +52,8 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       path: '/driver-routes',
       label: 'Minhas Rotas (Motorista)',
       icon: <Navigation size={18} />,
-      allowedRoles: ['driver', 'admin', 'manager', 'operator'],
+      // Restrito exclusivamente para motoristas
+      allowedRoles: ['driver'],
     },
     {
       id: 'users',

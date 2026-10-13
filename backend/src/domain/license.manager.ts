@@ -20,7 +20,8 @@ class LicenseManager {
   }
 
   saveLicenses(): Result<'saved', string> {
-    const result = saveObjectToFile('./data/licenses.json', this.licenses.entries())
+    // CORREÇÃO: Usar Object.fromEntries para converter o Map num objeto JSON válido
+    const result = saveObjectToFile('./data/licenses.json', Object.fromEntries(this.licenses.entries()))
     if (result.isErr) {
       console.error(result.err)
       return result

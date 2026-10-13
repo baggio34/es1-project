@@ -123,6 +123,11 @@ class UserManager {
     if (data.password) user.passwordHash = hash('sha256', data.password)
     if (data.name) user.name = data.name
     if (data.condition) user.condition = data.condition
+    
+    // CORREÇÃO: Permite salvar as licenças atualizadas quando for um motorista
+    if ((data as any).licenses !== undefined && user.role === 'driver') {
+      (user as any).licenses = (data as any).licenses
+    }
 
     this.saveUsers()
     return Ok('edited')

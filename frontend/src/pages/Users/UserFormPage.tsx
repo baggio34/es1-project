@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { User, UserRole, UserRegistrationPayload } from '../../models/user.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
@@ -6,17 +6,7 @@ import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../components/ui/card.tsx'
 import { ArrowLeft, Save, User as UserIcon, AlertCircle, Plus, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge.tsx'
-
-const AVAILABLE_LICENSES = [
-  'Carga Perigosa',
-  'Carga Refrigerada',
-  'Carga Viva',
-  'Carga Indivisível',
-  'Produtos Químicos',
-  'Inflamáveis',
-  'Medicamentos',
-  'Alimentos Perecíveis',
-]
+import { useLicense } from '../../view_models/useLicense.ts'
 
 export interface UserFormPageProps {
   initialUser?: User | null
@@ -44,6 +34,13 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses, createLicense } = useLicense()
+  const [newLicenseName, setNewLicenseName] = useState('')
+
+  useEffect(() => {
+    loadLicenses().catch(console.error)
+  }, [loadLicenses])
+
   const handleAddLicense = (license: string) => {
     if (!licenses.includes(license)) {
       setLicenses((prev) => [...prev, license])
@@ -68,7 +65,6 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
       setApiError('O CPF deve conter exatamente 11 dígitos.')
       return
     }
-    // Removida a validação que obrigava licenças para motoristas
 
     setIsSubmitting(true)
 
@@ -82,11 +78,12 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
       if (isEditing) {
         payload.condition = condition
         if (password) payload.password = password
+        if (role === 'driver') payload.licenses = licenses
       } else {
         payload.cpf = cleanCpf
         payload.password = password
         if (role === 'driver') {
-          payload.licenses = licenses // Se estiver vazio, envia [] normalmente
+          payload.licenses = licenses 
         }
       }
 
@@ -226,65 +223,93 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                 <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
                   <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Gerenciamento de Licenças Especiais (Opcional)</h4>
                   <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
-                    Adicione as licenças válidas na CNH do motorista caso ele opere cargas especiais. {isEditing && <span style={{ color: 'var(--color-danger-text)' }}>Não é possível alterar as licenças após a contratação.</span>}
+                    Adicione ou remova as licenças válidas na CNH do motorista caso ele opere cargas especiais.
                   </p>
                   
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
                     {licenses.map((license) => (
                       <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                         {license}
-                        {!isEditing && (
-                          <X
-                            size={12}
-                            style={{ opacity: 0.7, cursor: 'pointer' }}
-                            onClick={() => handleRemoveLicense(license)}
-                          />
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleRemoveLicense(license)
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', color: 'inherit' }}
+                        >
+                          <X size={14} style={{ opacity: 0.8 }} />
+                        </button>
                       </Badge>
                     ))}
                     {licenses.length === 0 && <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nenhuma licença especial vinculada. O motorista operará apenas cargas padrão.</span>}
                   </div>
 
-                  {!isEditing && (
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <select
-                        id="user-license-select"
-                        className="ui-select"
-                        style={{
-                          flex: 1,
-                          maxWidth: '300px',
-                          padding: '0.5rem 0.75rem',
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--color-border)',
-                          fontSize: '0.875rem',
-                          backgroundColor: 'var(--color-bg-card)',
-                        }}
-                        defaultValue=""
-                        disabled={isSubmitting}
-                      >
-                        <option value="" disabled>Selecione uma licença...</option>
-                        {AVAILABLE_LICENSES.filter((l) => !licenses.includes(l)).map((l) => (
-                          <option key={l} value={l}>{l}</option>
-                        ))}
-                      </select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        icon={<Plus size={14} />}
-                        disabled={isSubmitting}
-                        onClick={() => {
-                          const select = document.getElementById('user-license-select') as HTMLSelectElement
-                          if (select?.value) {
-                            handleAddLicense(select.value)
-                            select.value = ''
-                          }
-                        }}
-                      >
-                        Vincular
-                      </Button>
-                    </div>
-                  )}
+                  {/* Controles de vinculação visíveis em qualquer momento para o motorista */}
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <select
+                      id="user-license-select"
+                      className="ui-select"
+                      style={{
+                        flex: 1,
+                        maxWidth: '300px',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)',
+                        fontSize: '0.875rem',
+                        backgroundColor: 'var(--color-bg-card)',
+                      }}
+                      defaultValue=""
+                      disabled={isSubmitting || loadingLicenses}
+                    >
+                      <option value="" disabled>Selecione uma licença...</option>
+                      {dbLicenses.filter((l) => !licenses.includes(l.name)).map((l) => (
+                        <option key={l.slug} value={l.name}>{l.name}</option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      icon={<Plus size={14} />}
+                      disabled={isSubmitting || loadingLicenses}
+                      onClick={() => {
+                        const select = document.getElementById('user-license-select') as HTMLSelectElement
+                        if (select?.value) {
+                          handleAddLicense(select.value)
+                          select.value = ''
+                        }
+                      }}
+                    >
+                      Vincular
+                    </Button>
+                  </div>
+
+                  {/* Controle de criação */}
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                    <Input
+                      placeholder="Criar nova licença no sistema..."
+                      value={newLicenseName}
+                      onChange={(e) => setNewLicenseName(e.target.value)}
+                      disabled={isSubmitting || loadingLicenses}
+                      style={{ flex: 1, maxWidth: '300px' }}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!newLicenseName.trim() || isSubmitting || loadingLicenses}
+                      onClick={async () => {
+                        if (newLicenseName.trim()) {
+                          await createLicense({ name: newLicenseName.trim() })
+                          setNewLicenseName('')
+                        }
+                      }}
+                    >
+                      Cadastrar Licença
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

@@ -1,22 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { Vehicle, VehicleFormData, VehicleStatus } from '../../models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
-import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
-import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
-
-const AVAILABLE_LICENSES = [
-  'Carga Perigosa',
-  'Carga Refrigerada',
-  'Carga Viva',
-  'Carga Indivisível',
-  'Produtos Químicos',
-  'Inflamáveis',
-  'Medicamentos',
-  'Alimentos Perecíveis',
-]
+import { ArrowLeft, Check, AlertCircle, Plus, X, Trash2 } from 'lucide-react'
+import { useLicense } from '../../view_models/useLicense.ts'
 
 export interface VehicleFormPageProps {
   initialVehicle?: Vehicle | null
@@ -50,6 +39,13 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses, createLicense, deleteLicense } = useLicense()
+  const [newLicenseName, setNewLicenseName] = useState('')
+
+  useEffect(() => {
+    loadLicenses().catch(console.error)
+  }, [loadLicenses])
 
   const handleAddLicense = (license: string) => {
     if (!licenses.includes(license)) {
@@ -85,7 +81,6 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
     setIsSubmitting(true)
 
     try {
-      // Base do payload contendo os campos comuns exigidos pela API
       const payload: any = {
         model: model.trim(),
         color: color.trim(),
@@ -94,12 +89,9 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
         licenses, 
       }
 
-      // Separação lógica para respeitar estritamente os Schemas do TypeBox no backend
       if (isEditing) {
-        // Na EDIÇÃO (VehiclePatchSchema), a placa é omitida e a 'condition' é obrigatória
         payload.condition = initialVehicle && (initialVehicle as any).condition ? (initialVehicle as any).condition : 'active'
       } else {
-        // Na CRIAÇÃO (VehicleRegistrationSchema), a placa é obrigatória e a 'condition' é omitida
         payload.plate = cleanPlate
       }
 
@@ -180,7 +172,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   placeholder="Ex: ABC1D23"
                   maxLength={7}
                   value={plate}
-                  disabled={isSubmitting || isEditing} // Desabilitado na edição pois o UUID da rota é a própria placa
+                  disabled={isSubmitting || isEditing} 
                   onChange={(e) => {
                     setPlate(e.target.value.toUpperCase())
                     if (errors.plate) setErrors((prev) => ({ ...prev, plate: '' }))
@@ -266,23 +258,31 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
 
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
-                Licenças Requeridas
+                Licenças Requeridas e do Sistema
               </Label>
               <p className="text-xs text-slate-500" style={{ marginTop: '-0.25rem' }}>
-                Licenças que o motorista deve possuir para operar este veículo.
+                Gerencie as licenças disponíveis no banco de dados e vincule-as ao veículo.
               </p>
+              
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
                 {licenses.map((license) => (
-                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                     {license}
-                    <X
-                      size={12}
-                      style={{ opacity: 0.7 }}
-                      onClick={() => handleRemoveLicense(license)}
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleRemoveLicense(license)
+                      }}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', color: 'inherit' }}
+                    >
+                      <X size={14} style={{ opacity: 0.8 }} />
+                    </button>
                   </Badge>
                 ))}
               </div>
+
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
                 <select
                   id="vehicle-license-select"
@@ -296,11 +296,15 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                     backgroundColor: 'var(--color-bg-card)',
                   }}
                   defaultValue=""
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                 >
                   <option value="" disabled>Selecione uma licença...</option>
-                  {AVAILABLE_LICENSES.filter((l) => !licenses.includes(l)).map((l) => (
-                    <option key={l} value={l}>{l}</option>
+                  {dbLicenses
+                    .filter((l) => !licenses.includes(l.name))
+                    .map((l) => (
+                      <option key={l.slug} value={l.name} data-slug={l.slug}>
+                        {l.name}
+                      </option>
                   ))}
                 </select>
                 <Button
@@ -308,7 +312,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   variant="outline"
                   size="sm"
                   icon={<Plus size={14} />}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                   onClick={() => {
                     const select = document.getElementById('vehicle-license-select') as HTMLSelectElement
                     if (select?.value) {
@@ -317,7 +321,52 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                     }
                   }}
                 >
-                  Adicionar
+                  Vincular
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }}
+                  icon={<Trash2 size={14} />}
+                  disabled={isSubmitting || loadingLicenses}
+                  title="Excluir a licença selecionada do sistema"
+                  onClick={async () => {
+                    const select = document.getElementById('vehicle-license-select') as HTMLSelectElement
+                    if (select?.value) {
+                      const slug = dbLicenses.find((l) => l.name === select.value)?.slug
+                      if (slug && window.confirm(`Deseja realmente excluir permanentemente a licença "${select.value}" do sistema?`)) {
+                        await deleteLicense(slug)
+                        select.value = ''
+                      }
+                    }
+                  }}
+                >
+                  Excluir
+                </Button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <Input
+                  placeholder="Criar nova licença no sistema..."
+                  value={newLicenseName}
+                  onChange={(e) => setNewLicenseName(e.target.value)}
+                  disabled={isSubmitting || loadingLicenses}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!newLicenseName.trim() || isSubmitting || loadingLicenses}
+                  onClick={async () => {
+                    if (newLicenseName.trim()) {
+                      await createLicense({ name: newLicenseName.trim() })
+                      setNewLicenseName('')
+                    }
+                  }}
+                >
+                  Cadastrar Licença
                 </Button>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { Order, OrderFormData, OrderStatus } from '../../models/order.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
@@ -6,23 +6,13 @@ import { Label } from '../../components/ui/label.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
+import { useLicense } from '../../view_models/useLicense.ts'
 
 export interface OrderFormPageProps {
   initialOrder?: Order | null
   onSave: (data: OrderFormData) => Promise<void>
   onCancel: () => void
 }
-
-const AVAILABLE_LICENSES = [
-  'Carga Perigosa',
-  'Carga Refrigerada',
-  'Carga Viva',
-  'Carga Indivisível',
-  'Produtos Químicos',
-  'Inflamáveis',
-  'Medicamentos',
-  'Alimentos Perecíveis',
-]
 
 export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   initialOrder,
@@ -43,12 +33,18 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     initialOrder && initialOrder.licenses ? initialOrder.licenses : []
   )
   const [status, setStatus] = useState<OrderStatus>(initialOrder ? initialOrder.status : 'pendingApproval')
-  // motivo da rejeição – obrigatório quando status for 'rejected'
   const [reason, setReason] = useState<string>(initialOrder && (initialOrder as any).status === 'rejected' ? (initialOrder as any).reason || '' : '')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  // Integração com as licenças reais do back-end
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses } = useLicense()
+
+  useEffect(() => {
+    loadLicenses().catch(console.error)
+  }, [loadLicenses])
 
   const handleAddLicense = (license: string) => {
     if (!requiredLicenses.includes(license)) {
@@ -360,11 +356,11 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     backgroundColor: 'var(--color-bg-card)',
                   }}
                   defaultValue=""
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                 >
                   <option value="" disabled>Selecione uma licença para adicionar...</option>
-                  {AVAILABLE_LICENSES.filter((l) => !requiredLicenses.includes(l)).map((l) => (
-                    <option key={l} value={l}>{l}</option>
+                  {dbLicenses.filter((l) => !requiredLicenses.includes(l.name)).map((l) => (
+                    <option key={l.slug} value={l.name}>{l.name}</option>
                   ))}
                 </select>
                 <Button
@@ -372,7 +368,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   variant="outline"
                   size="sm"
                   icon={<Plus size={14} />}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                   onClick={() => {
                     const select = document.getElementById('order-license-select') as HTMLSelectElement
                     if (select?.value) {
@@ -409,7 +405,6 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     { value: 'rejected', label: 'Rejeitado' },
                   ]}
                 />
-                {/* Campo de motivo, exibido apenas quando status = 'rejected' */}
                 {status === 'rejected' && (
                   <div className="flex flex-col gap-2 mt-4">
                     <Label htmlFor="order-reason" required className="text-sm font-semibold text-slate-700">
