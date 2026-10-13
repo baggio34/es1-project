@@ -22,7 +22,7 @@ type LoadOrderError =
 class RouteManager {
   routes = new Map<string, Route>()
   
-  RouteManager() {
+  constructor() {
     const result = loadObjectFromFile<Record<string, Route>>('./data/routes.json')
     if (result.isOk) {
       this.routes = new Map(Object.entries(result.ok))

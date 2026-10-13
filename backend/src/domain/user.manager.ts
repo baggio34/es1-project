@@ -14,12 +14,13 @@ import { hash } from "crypto";
 class UserManager {
   private users = new Map<string, User>()
 
-  UserManager() {
+  constructor() {
     const result = loadObjectFromFile<Record<string, User>>('./data/users.json')
     if (result.isOk) {
       this.users = new Map(Object.entries(result.ok))
     } else {
       console.error(`Error loading users: '${result.err}'\nStarting with new data.`)
+      this.registerRoot("admin123")
     }
   }
 
@@ -88,6 +89,7 @@ class UserManager {
 
     this.users.set(data.username, user as User)
 
+    this.saveUsers()
     return Ok('created')
   }
 
@@ -122,6 +124,7 @@ class UserManager {
     if (data.name) user.name = data.name
     if (data.condition) user.condition = data.condition
 
+    this.saveUsers()
     return Ok('edited')
   }
 
@@ -134,23 +137,26 @@ class UserManager {
     if (!driver || !isDriver(driver)) return Err('noSuchDriver')
 
     this.users.set(username, { ...driver, ...data })
+    this.saveUsers()
     return Ok('ok')
   }
 
-
-  /// DELETE:
-  // public has(username: string): boolean {
-  //   return this.users.has(username)
-  // }
-
-  // public isActive(username: string): boolean {
-  //   return this.users.get(username)?.condition == 'active'
-  // }
-
-  // public isActiveAnd(username: string, func: (user: User) => boolean): boolean {
-  //   const user = this.get(username)
-  //   return !!user && user.condition == 'active' && func(user)
-  // }
+  /**
+   * Registra o administrador padrão, com a senha fornecida.
+   */
+  registerRoot(password: string): void {
+    this.users.set("root", {
+      name: "Administrador",
+      username: 'root',
+      role: 'admin',
+      cpf: "000.000.000-00",
+      condition: 'active',
+      registeredOn: new Date().toISOString(),
+      registeredBy: "root",
+      passwordHash: hash('sha256', password),
+    })
+    this.saveUsers()
+  }
 }
 
 export const userManager = new UserManager()

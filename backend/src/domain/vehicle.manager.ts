@@ -9,7 +9,7 @@ import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_o
 class VehicleManager {
   vehicles = new Map<string, Vehicle>
 
-  VehicleManager() {
+  constructor() {
     const result = loadObjectFromFile<Record<number, Vehicle>>('./data/vehicles.json')
     if (result.isOk) {
       this.vehicles = new Map(Object.entries(result.ok))

@@ -12,6 +12,8 @@ import { getOrderInfo } from "@/lib/order.utils.ts";
 import { routeManager } from "@/domain/route.manager.ts";
 import { vehicleManager } from "@/domain/vehicle.manager.ts";
 
+const idParams = Type.Object({ id: Type.Integer() })
+
 export default function orderRouter(app: FastifyInstance) {
   app.post<{ Body: OrderCreationPayload, Headers: { token: UUID } }>(
     "/orders", {
@@ -36,7 +38,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.get<{ Headers: { token: UUID }, Reply: string | OrderGetReply, Params: { id: number } }>(
     "/orders/:id", {
-    schema: requireTokenSchema(OrderGetSchema)
+    schema: { ...requireTokenSchema(OrderGetSchema), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -83,7 +85,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Body: OrderRejectionPayload, Reply: string, Params: { id: number } }>(
     "/orders/:id/reject", {
-    schema: payloadRequireTokenSchema(OrderRejectionSchema, Type.String())
+    schema: { ...payloadRequireTokenSchema(OrderRejectionSchema, Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -105,7 +107,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Body: OrderCancellationPayload, Reply: string, Params: { id: number } }>(
     "/orders/:id/cancel", {
-    schema: payloadRequireTokenSchema(OrderCancellationSchema, Type.String())
+    schema: { ...payloadRequireTokenSchema(OrderCancellationSchema, Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -127,7 +129,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
     "/orders/:id/approve", {
-    schema: requireTokenSchema(Type.String())
+    schema: { ...requireTokenSchema(Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -149,7 +151,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
     "/orders/:id/confirm-payment", {
-    schema: requireTokenSchema(Type.String())
+    schema: { ...requireTokenSchema(Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -171,7 +173,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
     "/orders/:id/confirm-arrival", {
-    schema: requireTokenSchema(Type.String())
+    schema: { ...requireTokenSchema(Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -193,7 +195,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Body: OrderLoadingPayload, Reply: string, Params: { id: number } }>(
     "/orders/:id/load", {
-    schema: payloadRequireTokenSchema(OrderLoadingSchema, Type.String())
+    schema: { ...payloadRequireTokenSchema(OrderLoadingSchema, Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id
@@ -216,7 +218,7 @@ export default function orderRouter(app: FastifyInstance) {
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
     "/orders/:id/unload", {
-    schema: requireTokenSchema(Type.String())
+    schema: { ...requireTokenSchema(Type.String()), params: idParams }
   }, (req, res) => {
     const token = req.headers.token
     const id = req.params.id

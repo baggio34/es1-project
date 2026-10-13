@@ -11,7 +11,7 @@ class OrderManager {
   orders = new Map<number, Order>
   idCounter = 1 
 
-  OrderManager() {
+  constructor() {
     const result = loadObjectFromFile<Record<number, Order>>('./data/orders.json')
     if (result.isOk) {
       this.orders = new Map<number, Order>(
@@ -19,7 +19,7 @@ class OrderManager {
       )
       // Atualiza o contador para o próximo id.
       for (const order of this.orders) {
-        if (order[1].id > this.idCounter) {
+        if (order[1].id >= this.idCounter) {
           this.idCounter = order[1].id + 1
         }
       }
@@ -143,13 +143,13 @@ class OrderManager {
 
     const order = orderManager.get(orderId)
     if (!order) return Err('noSuchOrder')
-    if (order.status != 'pendingApproval') return Err('cantBeConfirmed')
+    if (order.status != 'waitingPayment') return Err('cantBeConfirmed')
 
     this.orders.set(orderId, {
       ...order,
-      status: 'waitingPayment',
-      approvedBy: clerkId,
-      approvedOn: new Date().toISOString()
+      status: 'inPreparation',
+      paymentConfirmedBy: clerkId,
+      paymentConfirmedOn: new Date().toISOString()
     })
 
     this.saveOrders()
