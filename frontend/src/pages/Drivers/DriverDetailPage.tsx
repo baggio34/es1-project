@@ -3,6 +3,7 @@ import type { Driver } from '../../models/driver.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
+import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, User, Truck, Package, Map } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
@@ -25,13 +26,16 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
 }) => {
   const d = driver as any
   
-  // Cruzamento de dados através da Rota Ativa
-  const activeRoute = routes?.find(r => r.id === d.routeId)
-  const vehicle = vehicles?.find(v => v.plate === activeRoute?.vehicleId || v.id === activeRoute?.vehicleId)
+  const activeRoute = d.status !== 'free' ? routes?.find(r => r.id === d.routeId && r.status !== 'completed') : undefined
+  
+  const vehicle = activeRoute?.vehicleId 
+    ? vehicles?.find(v => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) 
+    : undefined
   
   const hasVehicle = !!vehicle
   const orderIds = activeRoute?.orders || activeRoute?.orderIds || []
   const routeId = activeRoute?.id
+  const licenses = d.licenses || []
 
   return (
     <div>
@@ -81,6 +85,16 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
                   @{d.username}
                 </span>
               </div>
+              {licenses.length > 0 && (
+                <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                  <span className="detail-label">Licenças Especiais (CNH)</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
+                    {licenses.map((lic: string) => (
+                      <Badge key={lic} variant="secondary">{lic}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -8,6 +8,7 @@ import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface DriverListPageProps {
   drivers: Driver[]
@@ -30,6 +31,9 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
   onDelete,
   onReload,
 }) => {
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null)
@@ -56,9 +60,11 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          <Button icon={<Plus size={16} />} onClick={onCreate}>
-            Novo Motorista
-          </Button>
+          {canEdit && (
+            <Button icon={<Plus size={16} />} onClick={onCreate}>
+              Novo Motorista
+            </Button>
+          )}
         </div>
       </div>
 
@@ -117,9 +123,11 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
             filteredDrivers.map((driver) => {
               const d = driver as any
               
-              // Cruzamento de dados através da Rota Ativa
-              const activeRoute = routes?.find(r => r.id === d.routeId)
-              const vehicle = vehicles?.find(v => v.plate === activeRoute?.vehicleId || v.id === activeRoute?.vehicleId)
+              const activeRoute = d.status !== 'free' ? routes?.find(r => r.id === d.routeId && r.status !== 'completed') : undefined
+              
+              const vehicle = activeRoute?.vehicleId 
+                ? vehicles?.find(v => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) 
+                : undefined
               
               const hasVehicle = !!vehicle
               const orderCount = activeRoute?.orders?.length || activeRoute?.orderIds?.length || 0
@@ -154,20 +162,24 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
                         title="Ver Detalhes"
                         onClick={() => onViewDetails(d.username || d.id)}
                       />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Pencil size={15} />}
-                        title="Editar Motorista"
-                        onClick={() => onEdit(d.username || d.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                        title="Excluir Motorista"
-                        onClick={() => setDriverToDelete(driver)}
-                      />
+                      {canEdit && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Pencil size={15} />}
+                            title="Editar Motorista"
+                            onClick={() => onEdit(d.username || d.id)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Trash2 size={15} color="var(--color-danger-button)" />}
+                            title="Excluir Motorista"
+                            onClick={() => setDriverToDelete(driver)}
+                          />
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

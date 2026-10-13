@@ -7,10 +7,11 @@ import { Modal } from '../../components/ui/Modal.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map } from 'lucide-react'
 import { getOrderStatusBadge, formatReg, formatCurrency } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface OrderDetailPageProps {
   order: Order
-  route?: { driverId: string; vehicleId: string }
+  route?: { id?: string; driverId: string; vehicleId: string }
   vehicle?: { plate: string; model: string }
   users?: Record<string, string>
   onBack: () => void
@@ -39,6 +40,11 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   onViewRoute,
   onAction,
 }) => {
+  const { user } = useAuth()
+  const userRole = user?.role?.toLowerCase()
+  // Apenas Admin e Manager podem alterar os status ou cancelar
+  const canManageStatus = ['admin', 'manager'].includes(userRole || '')
+
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
@@ -46,7 +52,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   const [accidentModalOpen, setAccidentModalOpen] = useState(false)
   const [accidentReason, setAccidentReason] = useState('')
   
-  // Novos estados para o modal de carregamento
   const [loadModalOpen, setLoadModalOpen] = useState(false)
   const [loadDriverId, setLoadDriverId] = useState('')
   const [loadVehicleId, setLoadVehicleId] = useState('')
@@ -56,30 +61,29 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   const isCancelled = order.status === 'cancelled'
   const isAccident = order.status === 'accident' || order.status === 'resolvedAccident'
 
-  const routeId = order.routeId
+  const routeId = route?.id || (order as any).routeId
   const arrivedOn = order.arrivedOn
-  const licenses = order.licenses || []
+  
+  const licenses = order.licenses || (order as any).requiredLicenses || []
+  
   const formatDate = (date?: string) => (date ? new Date(date).toLocaleString('pt-BR') : '')
   const userName = (id: string) => users?.[id] ?? id
 
   const renderTimelineTimestamp = (stepKey: OrderStatus) => {
     switch (stepKey) {
-      case 'pendingApproval':
-        return formatDate(order.createdOn)
-      case 'waitingPayment':
-        return formatDate(order.approvedOn)
-      case 'inPreparation':
-        return formatDate(order.paymentConfirmedOn)
-      case 'loaded':
-        return formatDate(order.loadedAt)
-      case 'arrived':
-        return formatDate(order.arrivedOn)
-      default:
-        return ''
+      case 'pendingApproval': return formatDate(order.createdOn)
+      case 'waitingPayment': return formatDate(order.approvedOn)
+      case 'inPreparation': return formatDate(order.paymentConfirmedOn)
+      case 'loaded': return formatDate(order.loadedAt)
+      case 'arrived': return formatDate(order.arrivedOn)
+      default: return ''
     }
   }
 
   const renderActions = () => {
+    // Se não tiver permissão para gerir status, não mostra botões
+    if (!canManageStatus) return null
+
     switch (order.status) {
       case 'pendingApproval':
         return (
@@ -106,11 +110,9 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         )
       case 'waitingDispatch':
         return (
-          <>
-            <Button variant="outline" icon={<Box size={16} />} onClick={() => onAction?.('unload', order.id)}>
-              Descarregar Pedido
-            </Button>
-          </>
+          <Button variant="outline" icon={<Box size={16} />} onClick={() => onAction?.('unload', order.id)}>
+            Descarregar Pedido
+          </Button>
         )
       case 'onRoute':
         return (
@@ -150,7 +152,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </div>
         <div className="page-actions">
           {renderActions()}
-          {order.status !== 'arrived' && order.status !== 'rejected' && !isCancelled && (
+          {canManageStatus && order.status !== 'arrived' && order.status !== 'rejected' && !isCancelled && (
             <Button variant="outline" style={{ color: 'var(--color-danger-button)', borderColor: 'var(--color-danger-button)' }} icon={<X size={16} />} onClick={() => setCancelModalOpen(true)}>
               Cancelar Pedido
             </Button>
@@ -158,7 +160,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </div>
       </div>
 
-      {/* Linha do Tempo Visual do Ciclo do Pedido */}
       {!isRejected && !isCancelled && !isAccident && (
         <Card style={{ marginBottom: '1.5rem' }}>
           <CardContent style={{ padding: '1.25rem 2rem' }}>
@@ -168,11 +169,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 const isCurrent = currentIndex === idx
                 const timestamp = renderTimelineTimestamp(step.key)
                 return (
-                  <div
-                    key={step.key}
-                    className={`timeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}
-                    style={{ position: 'relative' }}
-                  >
+                  <div key={step.key} className={`timeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`} style={{ position: 'relative' }}>
                     <div className="timeline-step-circle">
                       {isCompleted ? <CheckCircle size={16} /> : idx + 1}
                     </div>
@@ -190,25 +187,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </Card>
       )}
 
-      {/* Alerta em caso de Rejeição ou Acidente */}
       {(isRejected || isCancelled) && (
         <div
-          style={{
-            padding: '1rem 1.25rem',
-            backgroundColor: 'var(--color-danger-bg)',
-            border: '1px solid var(--color-danger-border)',
-            borderRadius: 'var(--radius-lg)',
-            marginBottom: '1.5rem',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-          }}
+          style={{ padding: '1rem 1.25rem', backgroundColor: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
         >
           <AlertTriangle size={20} color="var(--color-danger-text)" style={{ marginTop: '0.15rem' }} />
           <div>
-            <strong style={{ color: 'var(--color-danger-text)' }}>
-              {isCancelled ? 'Pedido Cancelado' : 'Pedido Rejeitado'}
-            </strong>
+            <strong style={{ color: 'var(--color-danger-text)' }}>{isCancelled ? 'Pedido Cancelado' : 'Pedido Rejeitado'}</strong>
             <p style={{ color: 'var(--color-danger-text)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Motivo informado: {(isCancelled ? order.cancellationReason : order.reason) || 'Motivo não informado.'}
             </p>
@@ -218,16 +203,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
 
       {isAccident && (
         <div
-          style={{
-            padding: '1rem 1.25rem',
-            backgroundColor: order.status === 'resolvedAccident' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
-            border: `1px solid ${order.status === 'resolvedAccident' ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`,
-            borderRadius: 'var(--radius-lg)',
-            marginBottom: '1.5rem',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-          }}
+          style={{ padding: '1rem 1.25rem', backgroundColor: order.status === 'resolvedAccident' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)', border: `1px solid ${order.status === 'resolvedAccident' ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`, borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
         >
           <AlertTriangle size={20} color={order.status === 'resolvedAccident' ? 'var(--color-success-text)' : 'var(--color-warning-text)'} style={{ marginTop: '0.15rem' }} />
           <div>
@@ -236,16 +212,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
             </strong>
             <p style={{ color: order.status === 'resolvedAccident' ? 'var(--color-success-text)' : 'var(--color-warning-text)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Relato: {order.accidentDescription || 'Incidente registrado na rota de entrega.'}
-              {order.status === 'resolvedAccident' && order.resolutionDescription && (
-                <> Resolução: {order.resolutionDescription}</>
-              )}
+              {order.status === 'resolvedAccident' && order.resolutionDescription && (<> Resolução: {order.resolutionDescription}</>)}
             </p>
           </div>
         </div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Detalhes da Carga */}
         <Card>
           <CardHeader>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -276,21 +249,25 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 <span className="detail-label">Preço do Frete</span>
                 <span className="detail-value">{formatCurrency(order.shipmentPrice)}</span>
               </div>
-              {licenses.length > 0 && (
-                <div className="detail-item">
-                  <span className="detail-label">Licenças Requeridas</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                    {licenses.map((lic) => (
+              
+              <div className="detail-item">
+                <span className="detail-label">Licenças Requeridas</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
+                  {licenses.length > 0 ? (
+                    licenses.map((lic: string) => (
                       <Badge key={lic} variant="secondary">{lic}</Badge>
-                    ))}
-                  </div>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                      Nenhuma licença especial exigida.
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Informações do Cliente */}
         <Card>
           <CardHeader>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -316,7 +293,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           </CardContent>
         </Card>
 
-        {/* Alocação Logística */}
         <Card>
           <CardHeader>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -374,7 +350,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </Card>
       </div>
 
-      {/* Modal de Carregamento (Alocar Motorista e Veículo) */}
       <Modal
         isOpen={loadModalOpen}
         onClose={() => setLoadModalOpen(false)}
@@ -388,23 +363,14 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
       >
         <div className="ui-form-group">
           <label className="ui-label">Nome de Usuário do Motorista</label>
-          <Input
-            placeholder="Ex: joao.motorista"
-            value={loadDriverId}
-            onChange={(e) => setLoadDriverId(e.target.value)}
-          />
+          <Input placeholder="Ex: joao.motorista" value={loadDriverId} onChange={(e) => setLoadDriverId(e.target.value)} />
         </div>
         <div className="ui-form-group" style={{ marginTop: '1rem' }}>
           <label className="ui-label">ID do Veículo (UUID ou Placa)</label>
-          <Input
-            placeholder="Ex: ABC1D23"
-            value={loadVehicleId}
-            onChange={(e) => setLoadVehicleId(e.target.value)}
-          />
+          <Input placeholder="Ex: ABC1D23" value={loadVehicleId} onChange={(e) => setLoadVehicleId(e.target.value)} />
         </div>
       </Modal>
 
-      {/* Modal de Rejeição */}
       <Modal
         isOpen={rejectModalOpen}
         onClose={() => setRejectModalOpen(false)}
@@ -419,17 +385,10 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
       >
         <div className="ui-form-group">
           <label className="ui-label">Motivo da Rejeição</label>
-          <textarea
-            className="ui-textarea"
-            rows={3}
-            placeholder="Ex: Carga excede as dimensões de segurança da frota..."
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-          />
+          <textarea className="ui-textarea" rows={3} placeholder="Ex: Carga excede as dimensões..." value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
         </div>
       </Modal>
 
-      {/* Modal de Cancelamento */}
       <Modal
         isOpen={cancelModalOpen}
         onClose={() => setCancelModalOpen(false)}
@@ -444,17 +403,10 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
       >
         <div className="ui-form-group">
           <label className="ui-label">Motivo do Cancelamento</label>
-          <textarea
-            className="ui-textarea"
-            rows={3}
-            placeholder="Ex: Solicitação do cliente, dados inconsistentes..."
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-          />
+          <textarea className="ui-textarea" rows={3} placeholder="Ex: Solicitação do cliente..." value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
         </div>
       </Modal>
 
-      {/* Modal de Acidente */}
       <Modal
         isOpen={accidentModalOpen}
         onClose={() => setAccidentModalOpen(false)}
@@ -469,13 +421,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
       >
         <div className="ui-form-group">
           <label className="ui-label">Detalhes da Ocorrência</label>
-          <textarea
-            className="ui-textarea"
-            rows={3}
-            placeholder="Ex: Acidente na rodovia BR-101..."
-            value={accidentReason}
-            onChange={(e) => setAccidentReason(e.target.value)}
-          />
+          <textarea className="ui-textarea" rows={3} placeholder="Ex: Acidente na rodovia..." value={accidentReason} onChange={(e) => setAccidentReason(e.target.value)} />
         </div>
       </Modal>
     </div>

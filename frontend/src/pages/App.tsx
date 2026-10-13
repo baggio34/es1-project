@@ -105,7 +105,6 @@ export default function App() {
 
   const userRole = user?.role?.toLowerCase()
 
-  // Extração da rota ativa e pedidos do motorista logado
   const activeDriverRoute = mappedRoutes.find(r => r.driverId === user?.username && r.status !== 'completed')
   const activeDriverOrders = activeDriverRoute ? mappedOrders.filter(o => activeDriverRoute.orders?.includes(o.id) || activeDriverRoute.orders?.includes(String(o.id))) : []
   const pastDriverRoutes = mappedRoutes.filter(r => r.driverId === user?.username && r.status === 'completed')
@@ -119,11 +118,11 @@ export default function App() {
           
           <Route index element={<Navigate to={userRole === 'driver' ? '/driver-routes' : '/orders'} replace />} />
 
+          {/* ROTAS DE GESTÃO DE PEDIDOS */}
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'clerk', 'Clerk', 'operator', 'Operator']} />}>
             <Route path="orders">
               <Route index element={<OrderListPage orders={mappedOrders} onViewDetails={(id) => navigate(`/orders/${id}`)} onEdit={(id) => navigate(`/orders/${id}/edit`)} onCreate={() => navigate('/orders/create')} onDelete={async (id, reason) => { await orderApi.cancel(id, { reason }); loadOrders() }} onReload={loadOrders} />} />
               <Route path="create" element={<OrderFormPage onSave={async (data) => { await orderApi.create(data as any); loadOrders(); navigate('/orders'); }} onCancel={() => navigate('/orders')} />} />
-              <Route path=":id" element={<OrderDetailWrapper orders={mappedOrders} orderApi={orderApi} loadOrders={loadOrders} loadRoutes={loadRoutes} loadDrivers={loadDrivers} loadVehicles={loadVehicles} />} />
               <Route path=":id/edit" element={<OrderFormWrapper orders={mappedOrders} onSave={async (data: any, id: string) => { await orderApi.patch(id, data); loadOrders() }} />} />
             </Route>
 
@@ -140,6 +139,12 @@ export default function App() {
             </Route>
           </Route>
 
+          {/* ROTA DE DETALHES DE PEDIDOS COMPARTILHADA (Incluindo Motoristas) */}
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'clerk', 'Clerk', 'operator', 'Operator', 'driver', 'Driver']} />}>
+             <Route path="orders/:id" element={<OrderDetailWrapper orders={mappedOrders} routes={mappedRoutes} vehicles={safeVehicles} users={safeUsers} orderApi={orderApi} loadOrders={loadOrders} loadRoutes={loadRoutes} loadDrivers={loadDrivers} loadVehicles={loadVehicles} />} />
+          </Route>
+
+          {/* ROTAS GERAIS DE ROTAS (Apenas listagem) */}
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'operator', 'Operator']} />}>
             <Route path="routes">
               <Route index element={
@@ -159,8 +164,12 @@ export default function App() {
                   }} 
                 />
               } />
-              <Route path=":id" element={<RouteDetailWrapper routes={mappedRoutes} orders={mappedOrders} routeApi={routeApi} loadRoutes={loadRoutes} loadOrders={loadOrders} loadVehicles={loadVehicles} loadDrivers={loadDrivers} />} />
             </Route>
+          </Route>
+
+          {/* ROTA DE DETALHES DE ROTAS COMPARTILHADA (Incluindo Motoristas) */}
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'operator', 'Operator', 'driver', 'Driver']} />}>
+            <Route path="routes/:id" element={<RouteDetailWrapper routes={mappedRoutes} orders={mappedOrders} routeApi={routeApi} loadRoutes={loadRoutes} loadOrders={loadOrders} loadVehicles={loadVehicles} loadDrivers={loadDrivers} />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'operator', 'Operator', 'driver', 'Driver']} />}>
@@ -220,7 +229,7 @@ export default function App() {
           <div style={{ padding: '4rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
             <h2>Acesso Negado ou Rota Inexistente (404)</h2>
             <p style={{ color: '#666', marginBottom: '2rem' }}>Você não tem permissão para ver esta página ou ela não existe.</p>
-            <Button onClick={() => navigate('/orders')}>Tentar ir para o Início</Button>
+            <Button onClick={() => navigate('/')}>Tentar ir para o Início</Button>
           </div>
         } />
       </Routes>
@@ -229,12 +238,34 @@ export default function App() {
 }
 
 // --- Componentes Wrappers ---
-function OrderDetailWrapper({ orders, orderApi, loadOrders, loadRoutes, loadDrivers, loadVehicles }: any) {
+function OrderDetailWrapper({ orders, routes, vehicles, users, orderApi, loadOrders, loadRoutes, loadDrivers, loadVehicles }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth() 
+  
   const order = orders.find((o: any) => o?.id === id || String(o?.id) === String(id))
   
   if (!order) return <div>Pedido não encontrado.</div>
+
+  const activeRoute = routes?.find((r: any) => 
+    (r.orders || r.orderIds || []).includes(order.id) || 
+    (r.orders || r.orderIds || []).includes(String(order.id))
+  )
+
+  const isDriver = user?.role?.toLowerCase() === 'driver'
+
+  if (isDriver && activeRoute?.driverId !== user?.username) {
+    return (
+      <div style={{ padding: '4rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
+        <h2>Acesso Negado</h2>
+        <p style={{ color: '#666', marginBottom: '2rem' }}>Este pedido não faz parte de nenhuma rota associada ao seu perfil.</p>
+        <Button onClick={() => navigate('/driver-routes')}>Voltar às Minhas Rotas</Button>
+      </div>
+    )
+  }
+
+  const vehicleObj = activeRoute ? vehicles?.find((v: any) => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) : undefined
+  const usersMap = users?.reduce((acc: any, u: any) => ({ ...acc, [u.username]: u.name }), {}) || {}
 
   const handleAction = async (actionType: string, orderId: number, payload?: any) => {
     try {
@@ -251,7 +282,6 @@ function OrderDetailWrapper({ orders, orderApi, loadOrders, loadRoutes, loadDriv
         default: console.warn('Ação desconhecida:', actionType);
       }
       
-      // FIX: Aguardar que todo o estado global do back-end chegue antes de re-renderizar
       await Promise.allSettled([
         loadOrders(),
         loadRoutes(),
@@ -264,7 +294,26 @@ function OrderDetailWrapper({ orders, orderApi, loadOrders, loadRoutes, loadDriv
     }
   }
 
-  return <OrderDetailPage order={order} onBack={() => navigate('/orders')} onEdit={() => navigate(`/orders/${id}/edit`)} onAction={handleAction} />
+  const handleBackNavigation = () => {
+    if (isDriver) {
+      navigate('/driver-routes')
+    } else {
+      navigate('/orders')
+    }
+  }
+
+  return (
+    <OrderDetailPage 
+      order={order} 
+      route={activeRoute} 
+      vehicle={vehicleObj} 
+      users={usersMap} 
+      onBack={handleBackNavigation} 
+      onEdit={() => navigate(`/orders/${id}/edit`)} 
+      onViewRoute={(routeId) => navigate(`/routes/${routeId}`)}
+      onAction={handleAction} 
+    />
+  )
 }
 
 function OrderFormWrapper({ orders, onSave }: { orders: any[], onSave: (data: any, id: string) => Promise<void> }) {
@@ -302,16 +351,31 @@ function DriverDetailWrapper({ drivers, routes, vehicles }: any) {
 function RouteDetailWrapper({ routes, orders, routeApi, loadRoutes, loadOrders, loadVehicles, loadDrivers }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  
   const route = routes.find((r: any) => r?.id === id)
   
   if (!route) return <div>Rota não encontrada.</div>
+
+  const isDriver = user?.role?.toLowerCase() === 'driver'
+
+  // BLINDAGEM DE SEGURANÇA: Motoristas só podem visualizar as suas próprias rotas
+  if (isDriver && route.driverId !== user?.username) {
+    return (
+      <div style={{ padding: '4rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
+        <h2>Acesso Negado</h2>
+        <p style={{ color: '#666', marginBottom: '2rem' }}>Esta rota não pertence ao seu perfil.</p>
+        <Button onClick={() => navigate('/driver-routes')}>Voltar às Minhas Rotas</Button>
+      </div>
+    )
+  }
   
   const routeOrders = orders.filter((o: any) => route.orders?.includes(o?.id) || route.orders?.includes(String(o?.id)))
   
   const handleAuthorize = async (routeId: string) => {
+    if (isDriver) return;
     try {
       await routeApi.authorizeDispatch(routeId)
-      // FIX: Sincronização estrita de estado após ação
       await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
     } catch (err: any) {
       alert(`Erro ao autorizar: ${err.message}`)
@@ -319,12 +383,20 @@ function RouteDetailWrapper({ routes, orders, routeApi, loadRoutes, loadOrders, 
   }
 
   const handleUnauthorize = async (routeId: string) => {
+    if (isDriver) return;
     try {
       await routeApi.unauthorizeDispatch(routeId)
-      // FIX: Sincronização estrita de estado após ação
       await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
     } catch (err: any) {
       alert(`Erro ao desautorizar: ${err.message}`)
+    }
+  }
+
+  const handleBackNavigation = () => {
+    if (isDriver) {
+      navigate('/driver-routes')
+    } else {
+      navigate('/routes')
     }
   }
 
@@ -332,7 +404,7 @@ function RouteDetailWrapper({ routes, orders, routeApi, loadRoutes, loadOrders, 
     <RouteDetailPage 
       route={route} 
       orders={routeOrders} 
-      onBack={() => navigate('/routes')} 
+      onBack={handleBackNavigation} 
       onViewOrder={(id) => navigate(`/orders/${id}`)} 
       onViewDriver={(id) => navigate(`/drivers/${id}`)} 
       onViewVehicle={(id) => navigate(`/vehicles/${id}`)}

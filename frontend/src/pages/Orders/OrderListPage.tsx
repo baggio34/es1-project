@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import type { Order } from '../../models/order.ts'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { Input } from '../../components/ui/input.tsx'
@@ -20,11 +21,19 @@ export interface OrderListPageProps {
 export const OrderListPage: React.FC<OrderListPageProps> = ({
   orders,
   onViewDetails,
-  onEdit, // Mantido na interface para não quebrar o App.tsx, mas não é utilizado aqui
+  onEdit, 
   onCreate,
   onDelete,
   onReload,
 }) => {
+  const { user } = useAuth()
+  
+  const userRole = user?.role?.toLowerCase()
+  // Clerk pode criar pedidos
+  const canCreate = ['admin', 'manager', 'clerk'].includes(userRole || '')
+  // Apenas Admin e Manager podem alterar status ou cancelar
+  const canManageStatus = ['admin', 'manager'].includes(userRole || '')
+
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
@@ -62,9 +71,11 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          <Button icon={<Plus size={16} />} onClick={onCreate}>
-            Novo Pedido
-          </Button>
+          {canCreate && (
+            <Button icon={<Plus size={16} />} onClick={onCreate}>
+              Novo Pedido
+            </Button>
+          )}
         </div>
       </div>
 
@@ -131,14 +142,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
             filteredOrders.map((order) => (
               <TableRow key={order.id}>
                 <TableCell>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.8125rem',
-                      fontWeight: 600,
-                      color: 'var(--color-primary)',
-                    }}
-                  >
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-primary)' }}>
                     #{order.id}
                   </span>
                 </TableCell>
@@ -156,21 +160,9 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                 <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
                 <TableCell style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Eye size={15} />}
-                      title="Ver Detalhes do Pedido"
-                      onClick={() => onViewDetails(order.id)}
-                    />
-                    {order.status !== 'arrived' && order.status !== 'cancelled' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                        title="Cancelar Pedido"
-                        onClick={() => setOrderToDelete(order)}
-                      />
+                    <Button variant="ghost" size="sm" icon={<Eye size={15} />} title="Ver Detalhes do Pedido" onClick={() => onViewDetails(order.id)} />
+                    {canManageStatus && order.status !== 'arrived' && order.status !== 'cancelled' && (
+                      <Button variant="ghost" size="sm" icon={<Trash2 size={15} color="var(--color-danger-button)" />} title="Cancelar Pedido" onClick={() => setOrderToDelete(order)} />
                     )}
                   </div>
                 </TableCell>
@@ -198,21 +190,11 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
         }}
       >
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          Deseja realmente cancelar o pedido{' '}
-          <strong>#{orderToDelete?.id}</strong> ({orderToDelete?.description})?
+          Deseja realmente cancelar o pedido <strong>#{orderToDelete?.id}</strong> ({orderToDelete?.description})?
         </p>
         <div className="ui-form-group" style={{ marginTop: '1rem' }}>
           <label className="ui-label">Motivo do Cancelamento</label>
-          <textarea
-            className="ui-textarea"
-            rows={3}
-            placeholder="Ex: Solicitação do cliente, dados inconsistentes..."
-            value={cancelReason}
-            onChange={(e) => {
-              setCancelReason(e.target.value)
-              setShowReasonError(false)
-            }}
-          />
+          <textarea className="ui-textarea" rows={3} placeholder="Ex: Solicitação do cliente, dados inconsistentes..." value={cancelReason} onChange={(e) => { setCancelReason(e.target.value); setShowReasonError(false) }} />
           {showReasonError && (
             <span className="text-xs font-medium text-red-600">Informe o motivo do cancelamento.</span>
           )}

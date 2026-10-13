@@ -7,6 +7,7 @@ import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface VehicleListPageProps {
   vehicles: Vehicle[]
@@ -29,6 +30,10 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
   onDelete,
   onReload,
 }) => {
+  // Puxa o utilizador atual e define se tem permissão de edição
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null)
@@ -54,9 +59,12 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          <Button icon={<Plus size={16} />} onClick={onCreate}>
-            Novo Veículo
-          </Button>
+          {/* Oculta a criação de novos veículos para operadores */}
+          {canEdit && (
+            <Button icon={<Plus size={16} />} onClick={onCreate}>
+              Novo Veículo
+            </Button>
+          )}
         </div>
       </div>
 
@@ -115,8 +123,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             </TableRow>
           ) : (
             filteredVehicles.map((vehicle) => {
-              // Cruzamento de dados através da Rota Ativa
-              const activeRoute = routes?.find(r => r.id === (vehicle as any).routeId)
+              const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
               const driver = drivers?.find(d => d.username === activeRoute?.driverId)
               const hasDriver = !!driver
 
@@ -159,20 +166,25 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                         title="Ver Detalhes"
                         onClick={() => onViewDetails(vehicle.plate)}
                       />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Pencil size={15} />}
-                        title="Editar Veículo"
-                        onClick={() => onEdit(vehicle.plate)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                        title="Excluir Veículo"
-                        onClick={() => setVehicleToDelete(vehicle)}
-                      />
+                      {/* Oculta as opções de edição e exclusão para operadores logísticos */}
+                      {canEdit && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Pencil size={15} />}
+                            title="Editar Veículo"
+                            onClick={() => onEdit(vehicle.plate)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Trash2 size={15} color="var(--color-danger-button)" />}
+                            title="Excluir Veículo"
+                            onClick={() => setVehicleToDelete(vehicle)}
+                          />
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

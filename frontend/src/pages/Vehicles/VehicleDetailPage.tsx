@@ -6,6 +6,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, Truck, Box, Shield, Map } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface VehicleDetailPageProps {
   vehicle: Vehicle
@@ -24,8 +25,11 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   onEdit,
   onViewRoute,
 }) => {
-  // Cruzamento de dados através da Rota Ativa
-  const activeRoute = routes?.find(r => r.id === (vehicle as any).routeId)
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
+  // Cruzamento de dados blindado (Ignora se estiver livre ou se a rota já foi concluída)
+  const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
   const driver = drivers?.find(d => d.username === activeRoute?.driverId)
   
   const hasDriver = !!driver
@@ -45,22 +49,18 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
             <h1 className="page-title">{vehicle.model}</h1>
             <p className="page-description">
               Placa:{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 600,
-                  color: 'var(--color-primary)',
-                }}
-              >
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-primary)' }}>
                 {vehicle.plate.toUpperCase()}
               </span>
             </p>
           </div>
         </div>
         <div className="page-actions">
-          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.plate)}>
-            Editar Ficha Técnica
-          </Button>
+          {canEdit && (
+            <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.plate)}>
+              Editar Ficha Técnica
+            </Button>
+          )}
         </div>
       </div>
 
@@ -143,23 +143,8 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </div>
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Capacidade Ocupada</span>
-                  <div
-                    style={{
-                      height: '8px',
-                      width: '100%',
-                      backgroundColor: 'var(--color-bg-subtle)',
-                      borderRadius: 'var(--radius-full)',
-                      marginTop: '0.5rem',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '65%',
-                        height: '100%',
-                        backgroundColor: 'var(--color-primary)',
-                      }}
-                    />
+                  <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)', marginTop: '0.5rem', overflow: 'hidden' }}>
+                    <div style={{ width: '65%', height: '100%', backgroundColor: 'var(--color-primary)' }} />
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem', display: 'inline-block' }}>
                     Aproximadamente 65% da capacidade de peso alocada.
