@@ -16,53 +16,59 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   const path = location.pathname
 
   const { user } = useAuth();
+  
+  // As permissões foram ajustadas para minúsculas (formato que o backend retorna agora)
   const navItems = [
     {
       id: 'orders',
       path: '/orders',
       label: 'Gerenciar Pedidos',
       icon: <Package size={18} />,
-      allowedRoles: ['Admin', 'Manager', 'Clerk'],
+      allowedRoles: ['admin', 'manager', 'clerk', 'operator'],
     },
     {
       id: 'vehicles',
       path: '/vehicles',
       label: 'Gerenciar Frota',
       icon: <Truck size={18} />,
-      allowedRoles: ['Admin', 'Manager'],
+      allowedRoles: ['admin', 'manager', 'operator'],
     },
     {
       id: 'drivers',
       path: '/drivers',
       label: 'Gerenciar Motoristas',
       icon: <Users size={18} />,
-      allowedRoles: ['Admin', 'Manager'],
+      allowedRoles: ['admin', 'manager', 'operator'],
     },
     {
       id: 'routes',
       path: '/routes',
       label: 'Gerenciar Rotas',
       icon: <Map size={18} />,
-      allowedRoles: ['Admin', 'Manager'],
+      allowedRoles: ['admin', 'manager', 'operator'],
     },
     {
       id: 'driver-routes',
       path: '/driver-routes',
       label: 'Minhas Rotas (Motorista)',
       icon: <Navigation size={18} />,
-      allowedRoles: ['Driver', 'Admin', 'Manager'],
+      allowedRoles: ['driver', 'admin', 'manager', 'operator'],
     },
     {
       id: 'users',
       path: '/users',
       label: 'Gerenciar Usuários',
       icon: <UserCog size={18} />,
-      allowedRoles: ['Admin', 'Manager'],
+      allowedRoles: ['admin', 'manager'],
     },
   ];
+
+  // Garante que a role do usuário seja lida em minúscula antes de comparar
+  const userRole = user?.role ? user.role.toLowerCase() : '';
+
   // Filter items based on the current user's role
   const filteredNavItems = navItems.filter(item =>
-    item.allowedRoles.includes(user?.role as any)
+    item.allowedRoles.includes(userRole)
   );
 
   return (

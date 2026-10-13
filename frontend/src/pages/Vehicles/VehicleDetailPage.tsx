@@ -20,11 +20,11 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   onEdit,
   onViewRoute,
 }) => {
-  const hasDriver = 'driverId' in vehicle && vehicle.driverId
-  const driverName = 'driverName' in vehicle ? vehicle.driverName : undefined
-  const orderIds = 'orderIds' in vehicle ? vehicle.orderIds : []
-  const routeId = 'routeId' in vehicle ? vehicle.routeId : undefined
-  const requiredLicenses = vehicle.requiredLicenses || []
+  const hasDriver = 'driverId' in vehicle && (vehicle as any).driverId
+  const driverName = 'driverName' in vehicle ? (vehicle as any).driverName : undefined
+  const orderIds = 'orderIds' in vehicle ? (vehicle as any).orderIds : []
+  const routeId = 'routeId' in vehicle ? (vehicle as any).routeId : undefined
+  const requiredLicenses = (vehicle as any).licenses || []
 
   return (
     <div>
@@ -45,13 +45,12 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 }}
               >
                 {vehicle.plate.toUpperCase()}
-              </span>{' '}
-              • UUID: {vehicle.id}
+              </span>
             </p>
           </div>
         </div>
         <div className="page-actions">
-          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.id)}>
+          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.plate)}>
             Editar Ficha Técnica
           </Button>
         </div>
@@ -96,7 +95,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Licenças Requeridas</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                    {requiredLicenses.map((lic) => (
+                    {requiredLicenses.map((lic: string) => (
                       <Badge key={lic} variant="secondary">{lic}</Badge>
                     ))}
                   </div>
@@ -127,7 +126,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                     {driverName || 'Nome indisponível'}
                   </span>
                   <span className="detail-value detail-value-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                    ID: {vehicle.driverId}
+                    ID: {(vehicle as any).driverId}
                   </span>
                 </div>
                 <div className="detail-item">
@@ -193,7 +192,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderIds.map((orderId) => (
+                {orderIds.map((orderId: string) => (
                   <TableRow key={orderId}>
                     <TableCell className="detail-value-mono">{orderId}</TableCell>
                     <TableCell>

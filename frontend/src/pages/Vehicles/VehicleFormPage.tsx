@@ -40,8 +40,8 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
   const [maxLoad, setMaxLoad] = useState<number | string>(
     initialVehicle ? initialVehicle.maxLoad : ''
   )
-  const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
-    initialVehicle && initialVehicle.requiredLicenses ? initialVehicle.requiredLicenses : []
+  const [licenses, setLicenses] = useState<string[]>(
+    initialVehicle && (initialVehicle as any).licenses ? (initialVehicle as any).licenses : []
   )
   const [status, setStatus] = useState<VehicleStatus>(
     initialVehicle ? initialVehicle.status : 'free'
@@ -52,13 +52,13 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
   const [apiError, setApiError] = useState<string | null>(null)
 
   const handleAddLicense = (license: string) => {
-    if (!requiredLicenses.includes(license)) {
-      setRequiredLicenses((prev) => [...prev, license])
+    if (!licenses.includes(license)) {
+      setLicenses((prev) => [...prev, license])
     }
   }
 
   const handleRemoveLicense = (license: string) => {
-    setRequiredLicenses((prev) => prev.filter((l) => l !== license))
+    setLicenses((prev) => prev.filter((l) => l !== license))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,16 +85,25 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
     setIsSubmitting(true)
 
     try {
-      await onSave({
+      // Base do payload contendo os campos comuns exigidos pela API
+      const payload: any = {
         model: model.trim(),
-        plate: cleanPlate,
         color: color.trim(),
         internalVolume: Number(internalVolume),
         maxLoad: Number(maxLoad),
-        requiredLicenses,
-        status,
-        driverId: initialVehicle && 'driverId' in initialVehicle ? initialVehicle.driverId : undefined,
-      })
+        licenses, 
+      }
+
+      // Separação lógica para respeitar estritamente os Schemas do TypeBox no backend
+      if (isEditing) {
+        // Na EDIÇÃO (VehiclePatchSchema), a placa é omitida e a 'condition' é obrigatória
+        payload.condition = initialVehicle && (initialVehicle as any).condition ? (initialVehicle as any).condition : 'active'
+      } else {
+        // Na CRIAÇÃO (VehicleRegistrationSchema), a placa é obrigatória e a 'condition' é omitida
+        payload.plate = cleanPlate
+      }
+
+      await onSave(payload)
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o veículo. Tente novamente.')
     } finally {
@@ -171,7 +180,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   placeholder="Ex: ABC1D23"
                   maxLength={7}
                   value={plate}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isEditing} // Desabilitado na edição pois o UUID da rota é a própria placa
                   onChange={(e) => {
                     setPlate(e.target.value.toUpperCase())
                     if (errors.plate) setErrors((prev) => ({ ...prev, plate: '' }))
@@ -255,7 +264,6 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
               </div>
             </div>
 
-            {/* Licenças Requeridas */}
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
                 Licenças Requeridas
@@ -264,7 +272,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                 Licenças que o motorista deve possuir para operar este veículo.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
-                {requiredLicenses.map((license) => (
+                {licenses.map((license) => (
                   <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
                     {license}
                     <X
@@ -291,7 +299,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   disabled={isSubmitting}
                 >
                   <option value="" disabled>Selecione uma licença...</option>
-                  {AVAILABLE_LICENSES.filter((l) => !requiredLicenses.includes(l)).map((l) => (
+                  {AVAILABLE_LICENSES.filter((l) => !licenses.includes(l)).map((l) => (
                     <option key={l} value={l}>{l}</option>
                   ))}
                 </select>
@@ -314,23 +322,8 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="vehicle-status" className="text-sm font-semibold text-slate-700">Status Operacional</Label>
-              <Select
-                id="vehicle-status"
-                value={status}
-                disabled={isSubmitting}
-                onChange={(e) => setStatus(e.target.value as VehicleStatus)}
-                options={[
-                  { value: 'free', label: 'Disponível no Pátio' },
-                  { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-                  { value: 'onRoute', label: 'Em Rota de Entrega' },
-                ]}
-              />
-            </div>
-
             {isEditing && initialVehicle && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 mt-4">
                 <span className="text-xs text-slate-500">
                   ID do Veículo:{' '}
                   <code className="font-mono font-semibold text-slate-700">{initialVehicle.id}</code>

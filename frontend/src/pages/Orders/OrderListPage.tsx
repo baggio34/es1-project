@@ -5,22 +5,22 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
-import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, RefreshCw } from 'lucide-react'
 import { formatCurrency, getOrderStatusBadge } from '../../utils/formatters.tsx'
 
 export interface OrderListPageProps {
   orders: Order[]
-  onViewDetails: (id: string) => void
-  onEdit: (id: string) => void
+  onViewDetails: (id: number) => void
+  onEdit: (id: number) => void
   onCreate: () => void
-  onDelete: (id: string) => void
+  onDelete: (id: number, reason: string) => void
   onReload: () => void
 }
 
 export const OrderListPage: React.FC<OrderListPageProps> = ({
   orders,
   onViewDetails,
-  onEdit,
+  onEdit, // Mantido na interface para não quebrar o App.tsx, mas não é utilizado aqui
   onCreate,
   onDelete,
   onReload,
@@ -28,8 +28,15 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [showReasonError, setShowReasonError] = useState(false)
 
-  
+  const closeCancelModal = () => {
+    setOrderToDelete(null)
+    setCancelReason('')
+    setShowReasonError(false)
+  }
+
   const safeOrders = Array.isArray(orders) ? orders : []
   const filteredOrders = safeOrders.filter((order) => {
     const query = searchTerm.toLowerCase()
@@ -85,10 +92,14 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
               { value: 'pendingApproval', label: 'Pendente Aprovação' },
               { value: 'waitingPayment', label: 'Aguardando Pagamento' },
               { value: 'inPreparation', label: 'Em Preparação' },
+              { value: 'loaded', label: 'Carregado' },
               { value: 'waitingDispatch', label: 'Aguardando Despacho' },
               { value: 'onRoute', label: 'Em Rota' },
               { value: 'arrived', label: 'Entregue' },
               { value: 'rejected', label: 'Rejeitado' },
+              { value: 'accident', label: 'Acidente' },
+              { value: 'resolvedAccident', label: 'Acidente Resolvido' },
+              { value: 'cancelled', label: 'Cancelado' },
             ]}
           />
         </div>
@@ -102,6 +113,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
             <TableHead className="min-w-[170px]">Cliente Solicitante</TableHead>
             <TableHead className="min-w-[190px]">Destino</TableHead>
             <TableHead className="min-w-[140px]">Peso / Volume</TableHead>
+            <TableHead className="min-w-[170px]">Valor / Frete</TableHead>
             <TableHead className="min-w-[150px]">Status</TableHead>
             <TableHead className="w-[120px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
@@ -109,7 +121,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
         <TableBody>
           {filteredOrders.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} style={{ textAlign: 'center', padding: '2.5rem' }}>
+              <TableCell colSpan={8} style={{ textAlign: 'center', padding: '2.5rem' }}>
                 <span style={{ color: 'var(--color-text-muted)' }}>
                   Nenhum pedido localizado com os filtros informados.
                 </span>
@@ -127,7 +139,7 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                       color: 'var(--color-primary)',
                     }}
                   >
-                    #{order.id.slice(0, 8)}
+                    #{order.id}
                   </span>
                 </TableCell>
                 <TableCell style={{ fontWeight: 600 }}>{order.description}</TableCell>
@@ -137,6 +149,9 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                 </TableCell>
                 <TableCell style={{ color: 'var(--color-text-secondary)' }}>
                   {order.weight} kg • {order.volume} m³
+                </TableCell>
+                <TableCell style={{ color: 'var(--color-text-secondary)' }}>
+                  {formatCurrency(order.value)} / {formatCurrency(order.shipmentPrice)}
                 </TableCell>
                 <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
                 <TableCell style={{ textAlign: 'right' }}>
@@ -148,20 +163,15 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                       title="Ver Detalhes do Pedido"
                       onClick={() => onViewDetails(order.id)}
                     />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Pencil size={15} />}
-                      title="Editar Pedido"
-                      onClick={() => onEdit(order.id)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                      title="Excluir Pedido"
-                      onClick={() => setOrderToDelete(order)}
-                    />
+                    {order.status !== 'arrived' && order.status !== 'cancelled' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
+                        title="Cancelar Pedido"
+                        onClick={() => setOrderToDelete(order)}
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -172,22 +182,41 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
 
       <Modal
         isOpen={!!orderToDelete}
-        onClose={() => setOrderToDelete(null)}
-        title="Confirmar Cancelamento / Exclusão de Pedido"
-        description="Esta ação removerá o pedido dos registros do sistema."
-        confirmText="Excluir Pedido"
+        onClose={closeCancelModal}
+        title="Cancelar Pedido"
+        description="O pedido não será apagado: ele continua no histórico com o status Cancelado."
+        confirmText="Confirmar Cancelamento"
         confirmVariant="destructive"
         onConfirm={() => {
-          if (orderToDelete) {
-            onDelete(orderToDelete.id)
-            setOrderToDelete(null)
+          if (!orderToDelete) return
+          if (!cancelReason.trim()) {
+            setShowReasonError(true)
+            return
           }
+          onDelete(orderToDelete.id, cancelReason.trim())
+          closeCancelModal()
         }}
       >
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          Deseja realmente excluir o pedido{' '}
-          <strong>#{orderToDelete?.id.slice(0, 8)}</strong> ({orderToDelete?.description})?
+          Deseja realmente cancelar o pedido{' '}
+          <strong>#{orderToDelete?.id}</strong> ({orderToDelete?.description})?
         </p>
+        <div className="ui-form-group" style={{ marginTop: '1rem' }}>
+          <label className="ui-label">Motivo do Cancelamento</label>
+          <textarea
+            className="ui-textarea"
+            rows={3}
+            placeholder="Ex: Solicitação do cliente, dados inconsistentes..."
+            value={cancelReason}
+            onChange={(e) => {
+              setCancelReason(e.target.value)
+              setShowReasonError(false)
+            }}
+          />
+          {showReasonError && (
+            <span className="text-xs font-medium text-red-600">Informe o motivo do cancelamento.</span>
+          )}
+        </div>
       </Modal>
     </div>
   )

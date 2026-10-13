@@ -1,23 +1,27 @@
 import React from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext.tsx'
-import type { UserRole } from '../../models/user.ts'
+// Removida a importação de UserRole para evitar conflitos de tipagem, usando string genérica
 
 interface ProtectedRouteProps {
-  allowedRoles: UserRole[]
+  allowedRoles: string[]
   redirectTo?: string
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, redirectTo = '/orders' }) => {
-  const { user, hasRole } = useAuth()
+  const { user } = useAuth()
 
   if (!user) {
     return <Navigate to="/login" replace />
   }
 
-  if (!hasRole(allowedRoles)) {
+  // Normalizamos para minúsculas para evitar erros (ex: "Driver" vs "driver")
+  const userRole = user.role.toLowerCase()
+  const isAllowed = allowedRoles.some(r => r.toLowerCase() === userRole)
+
+  if (!isAllowed) {
     // Se o usuário logado for Motorista, mandar pro painel dele, senao manda pro redirectTo (orders)
-    const fallbackPath = user.role === 'Driver' ? '/driver-routes' : redirectTo
+    const fallbackPath = userRole === 'driver' ? '/driver-routes' : redirectTo
     return <Navigate to={fallbackPath} replace />
   }
 

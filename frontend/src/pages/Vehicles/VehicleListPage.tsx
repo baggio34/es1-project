@@ -109,10 +109,10 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             </TableRow>
           ) : (
             filteredVehicles.map((vehicle) => {
-              const hasDriver = 'driverId' in vehicle && vehicle.driverId
+              const hasDriver = 'driverId' in vehicle && (vehicle as any).driverId
 
               return (
-                <TableRow key={vehicle.id}>
+                <TableRow key={vehicle.plate}>
                   <TableCell style={{ fontWeight: 600 }}>{vehicle.model}</TableCell>
                   <TableCell>
                     <span
@@ -135,7 +135,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                   <TableCell>
                     {hasDriver ? (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                        ID {vehicle.driverId.slice(0, 8)}...
+                        ID {String((vehicle as any).driverId).slice(0, 8)}...
                       </span>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)' }}>Nenhum</span>
@@ -148,14 +148,14 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                         size="sm"
                         icon={<Eye size={15} />}
                         title="Ver Detalhes"
-                        onClick={() => onViewDetails(vehicle.id)}
+                        onClick={() => onViewDetails(vehicle.plate)}
                       />
                       <Button
                         variant="ghost"
                         size="sm"
                         icon={<Pencil size={15} />}
                         title="Editar Veículo"
-                        onClick={() => onEdit(vehicle.id)}
+                        onClick={() => onEdit(vehicle.plate)}
                       />
                       <Button
                         variant="ghost"
@@ -182,7 +182,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
         confirmVariant="destructive"
         onConfirm={() => {
           if (vehicleToDelete) {
-            onDelete(vehicleToDelete.id)
+            onDelete(vehicleToDelete.plate)
             setVehicleToDelete(null)
           }
         }}

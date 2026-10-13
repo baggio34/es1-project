@@ -10,8 +10,8 @@ import { getRouteStatusBadge } from '../../utils/formatters.tsx'
 
 export interface RouteListPageProps {
   routes: Route[]
-  drivers: Driver[]           // added to resolve driver names
-  vehicles: Vehicle[]         // added to resolve vehicle names
+  drivers: any[]           // Flexibilizado, pois o endpoint /drivers retorna UserGetReply[]
+  vehicles: Vehicle[]         
   onReload: () => void
   onViewDetails: (id: string) => void
   onAuthorizeDispatch: (id: string) => void
@@ -35,14 +35,13 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
     return matchesStatus
   })
 
-  // Helper functions to resolve names from IDs – fall back to ID if not found
   const getDriverName = (driverId: string) => {
-    const driver = drivers.find((d) => d.id === driverId)
-    return driver ? driver.name : driverId
+    const driver = drivers.find((d) => (d.user ? d.user.username === driverId : d.id === driverId))
+    return driver ? (driver.user ? driver.user.name : driver.name) : driverId
   }
   const getVehicleModel = (vehicleId: string) => {
-    const vehicle = vehicles.find((v) => v.id === vehicleId)
-    return vehicle ? vehicle.model : vehicleId
+    const vehicle = vehicles.find((v) => v.plate === vehicleId || v.id === vehicleId)
+    return vehicle ? `${vehicle.model} (${vehicle.plate})` : vehicleId
   }
 
   return (

@@ -37,8 +37,10 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   const [destination, setDestination] = useState(initialOrder ? initialOrder.destination : '')
   const [weight, setWeight] = useState<number | string>(initialOrder ? initialOrder.weight : '')
   const [volume, setVolume] = useState<number | string>(initialOrder ? initialOrder.volume : '')
+  const [value, setValue] = useState<number | string>(initialOrder ? initialOrder.value : '')
+  const [shipmentPrice, setShipmentPrice] = useState<number | string>(initialOrder ? initialOrder.shipmentPrice : '')
   const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
-    initialOrder && initialOrder.requiredLicenses ? initialOrder.requiredLicenses : []
+    initialOrder && initialOrder.licenses ? initialOrder.licenses : []
   )
   const [status, setStatus] = useState<OrderStatus>(initialOrder ? initialOrder.status : 'pendingApproval')
   // motivo da rejeição – obrigatório quando status for 'rejected'
@@ -70,6 +72,8 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
     if (Number(volume) <= 0 || isNaN(Number(volume))) newErrors.volume = 'O volume deve ser maior que zero.'
+    if (value === '' || isNaN(Number(value)) || Number(value) < 0) newErrors.value = 'Informe o valor dos itens (zero ou mais).'
+    if (shipmentPrice === '' || isNaN(Number(shipmentPrice)) || Number(shipmentPrice) < 0) newErrors.shipmentPrice = 'Informe o preço do frete (zero ou mais).'
     if (status === 'rejected' && !reason?.trim()) newErrors.reason = 'Informe o motivo da rejeição.'
 
     if (Object.keys(newErrors).length > 0) {
@@ -87,10 +91,11 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
         destination: destination.trim(),
         weight: Number(weight),
         volume: Number(volume),
-        requiredLicenses,
-        status,
-        // inclui motivo apenas se o status for rejeitado
-        ...(status === 'rejected' ? { reason: reason.trim() } : {}),
+        value: Number(value),
+        shipmentPrice: Number(shipmentPrice),
+        licenses: requiredLicenses,
+        ...(isEditing ? { status } : {}),
+        ...(isEditing && status === 'rejected' ? { reason: reason.trim() } : {}),
       })
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o pedido. Tente novamente.')
@@ -272,6 +277,56 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="order-value" required className="text-sm font-semibold text-slate-700">
+                  Valor dos Itens (R$)
+                </Label>
+                <Input
+                  autoComplete='off'
+                  id="order-value"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 12500.00"
+                  value={value}
+                  disabled={isSubmitting}
+                  onChange={(e) => {
+                    setValue(e.target.value)
+                    if (errors.value) setErrors((p) => ({ ...p, value: '' }))
+                  }}
+                  error={errors.value}
+                />
+                {errors.value && (
+                  <span className="text-xs font-medium text-red-600">{errors.value}</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="order-shipment-price" required className="text-sm font-semibold text-slate-700">
+                  Preço do Frete (R$)
+                </Label>
+                <Input
+                  autoComplete='off'
+                  id="order-shipment-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 850.00"
+                  value={shipmentPrice}
+                  disabled={isSubmitting}
+                  onChange={(e) => {
+                    setShipmentPrice(e.target.value)
+                    if (errors.shipmentPrice) setErrors((p) => ({ ...p, shipmentPrice: '' }))
+                  }}
+                  error={errors.shipmentPrice}
+                />
+                {errors.shipmentPrice && (
+                  <span className="text-xs font-medium text-red-600">{errors.shipmentPrice}</span>
+                )}
+              </div>
+            </div>
+
             {/* Licenças Requeridas */}
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
@@ -345,9 +400,12 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     { value: 'pendingApproval', label: 'Pendente de Aprovação' },
                     { value: 'waitingPayment', label: 'Aguardando Pagamento' },
                     { value: 'inPreparation', label: 'Em Preparação' },
+                    { value: 'loaded', label: 'Carregado' },
                     { value: 'waitingDispatch', label: 'Aguardando Despacho' },
                     { value: 'onRoute', label: 'Em Rota' },
                     { value: 'arrived', label: 'Entregue' },
+                    { value: 'accident', label: 'Acidente' },
+                    { value: 'resolvedAccident', label: 'Acidente Resolvido' },
                     { value: 'rejected', label: 'Rejeitado' },
                   ]}
                 />
