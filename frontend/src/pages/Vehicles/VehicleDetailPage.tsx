@@ -9,6 +9,8 @@ import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 
 export interface VehicleDetailPageProps {
   vehicle: Vehicle
+  routes?: any[]
+  drivers?: any[]
   onBack: () => void
   onEdit: (id: string) => void
   onViewRoute?: (routeId: string) => void
@@ -16,14 +18,20 @@ export interface VehicleDetailPageProps {
 
 export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   vehicle,
+  routes,
+  drivers,
   onBack,
   onEdit,
   onViewRoute,
 }) => {
-  const hasDriver = 'driverId' in vehicle && (vehicle as any).driverId
-  const driverName = 'driverName' in vehicle ? (vehicle as any).driverName : undefined
-  const orderIds = 'orderIds' in vehicle ? (vehicle as any).orderIds : []
-  const routeId = 'routeId' in vehicle ? (vehicle as any).routeId : undefined
+  // Cruzamento de dados através da Rota Ativa
+  const activeRoute = routes?.find(r => r.id === (vehicle as any).routeId)
+  const driver = drivers?.find(d => d.username === activeRoute?.driverId)
+  
+  const hasDriver = !!driver
+  const driverName = driver?.name
+  const orderIds = activeRoute?.orders || activeRoute?.orderIds || []
+  const routeId = activeRoute?.id
   const requiredLicenses = (vehicle as any).licenses || []
 
   return (
@@ -126,7 +134,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                     {driverName || 'Nome indisponível'}
                   </span>
                   <span className="detail-value detail-value-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                    ID: {(vehicle as any).driverId}
+                    @{driver?.username}
                   </span>
                 </div>
                 <div className="detail-item">
@@ -192,9 +200,9 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderIds.map((orderId: string) => (
+                {orderIds.map((orderId: string | number) => (
                   <TableRow key={orderId}>
-                    <TableCell className="detail-value-mono">{orderId}</TableCell>
+                    <TableCell className="detail-value-mono">#{orderId}</TableCell>
                     <TableCell>
                       <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
                         {vehicle.status === 'onRoute' ? 'Em Deslocamento' : 'Carregado no Pátio'}

@@ -66,20 +66,23 @@ export default function orderRouter(app: FastifyInstance) {
     const token = req.headers.token
 
     const requester = authenticate(token)
-    if (requester.isErr || isDriver(requester.ok)) {
+    if (requester.isErr) {
       res.status(401).send("not authorized")
       return
-    } 
+    }
 
-    const orders = orderManager.getAll().map(order => {
-      const route = 'routeId' in order ? routeManager.get(order.routeId)! : undefined
-      if (!route) return { order }
-      return {
-        order,
-        vehicle: vehicleManager.get(route.vehicleId)!,
-        driver: userManager.get(route.driverId)!,
-      }
-    })
+    const user = requester.ok
+    const orders = orderManager.getAll()
+      .filter(order => !isDriver(user) || ('routeId' in user && 'routeId' in order && order.routeId == user.routeId))
+      .map(order => {
+        const route = 'routeId' in order ? routeManager.get(order.routeId)! : undefined
+        if (!route) return { order }
+        return {
+          order,
+          vehicle: vehicleManager.get(route.vehicleId)!,
+          driver: userManager.get(route.driverId)!,
+        }
+      })
     res.status(200).send(orders)
   })
 

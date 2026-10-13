@@ -4,7 +4,7 @@ import type { Order } from '../../models/order.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
-import { ArrowLeft, Truck, Package, CheckCircle, Map, User } from 'lucide-react'
+import { ArrowLeft, Truck, Package, CheckCircle, XCircle, Map, User } from 'lucide-react'
 import { getRouteStatusBadge, getOrderStatusBadge } from '../../utils/formatters.tsx'
 
 export interface RouteDetailPageProps {
@@ -14,6 +14,8 @@ export interface RouteDetailPageProps {
   onViewOrder: (orderId: string) => void
   onViewDriver: (driverId: string) => void
   onViewVehicle: (vehicleId: string) => void
+  onAuthorizeDispatch?: (id: string) => void
+  onUnauthorizeDispatch?: (id: string) => void
 }
 
 export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
@@ -23,7 +25,11 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
   onViewOrder,
   onViewDriver,
   onViewVehicle,
+  onAuthorizeDispatch,
+  onUnauthorizeDispatch,
 }) => {
+  const orderCount = route.orders?.length || 0
+
   return (
     <div>
       <div className="page-header">
@@ -38,7 +44,26 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
             </p>
           </div>
         </div>
-        <div className="page-actions">
+        <div className="page-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {route.status === 'waitingOperatorOrder' && (
+            <Button 
+              variant="default" 
+              icon={<CheckCircle size={16} />} 
+              onClick={() => onAuthorizeDispatch?.(route.id)}
+            >
+              Autorizar Saída
+            </Button>
+          )}
+          {route.status === 'readyToDispatch' && (
+            <Button 
+              variant="outline" 
+              style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }} 
+              icon={<XCircle size={16} />} 
+              onClick={() => onUnauthorizeDispatch?.(route.id)}
+            >
+              Desautorizar Saída
+            </Button>
+          )}
           {getRouteStatusBadge(route.status)}
         </div>
       </div>
@@ -85,7 +110,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
         <CardHeader>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Package size={18} color="var(--color-primary)" />
-            <CardTitle>Pedidos da Rota ({route.orderIds.length})</CardTitle>
+            <CardTitle>Pedidos da Rota ({orderCount})</CardTitle>
           </div>
         </CardHeader>
         <CardContent style={{ padding: 0 }}>
@@ -118,7 +143,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                     <TableRow key={order.id}>
                       <TableCell>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                          #{order.id.slice(0, 8)}
+                          #{order.id}
                         </span>
                       </TableCell>
                       <TableCell style={{ fontWeight: 600 }}>{order.description}</TableCell>
@@ -130,7 +155,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                         {statusTime || '--'}
                       </TableCell>
                       <TableCell style={{ textAlign: 'right' }}>
-                        <Button variant="ghost" size="sm" onClick={() => onViewOrder(order.id)}>Ver Pedido</Button>
+                        <Button variant="ghost" size="sm" onClick={() => onViewOrder(String(order.id))}>Ver Pedido</Button>
                       </TableCell>
                     </TableRow>
                   )

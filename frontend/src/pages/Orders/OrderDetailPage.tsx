@@ -382,7 +382,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         description="Atribua um motorista e um veículo para iniciar o carregamento deste pedido."
         confirmText="Confirmar Carregamento"
         onConfirm={() => {
-          onAction?.('load', order.id, { driverId: loadDriverId, vehicleId: loadVehicleId })
+          onAction?.('load', order.id, { driverId: loadDriverId, vehicleId: loadVehicleId.toUpperCase() })
           setLoadModalOpen(false)
         }}
       >

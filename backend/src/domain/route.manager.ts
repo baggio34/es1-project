@@ -40,16 +40,10 @@ class RouteManager {
     return Ok('saved')
   }
 
-  /**
-   * Retorna uma rota dado seu `id`.
-   */
   public get(id: string): Route | undefined {
     return this.routes.get(id)
   }
 
-  /**
-   * Retorna todas as rotas. Também permite filtrar pelo `status`.
-   */
   public getAll(status?: string): Route[] {
     if (!status) return [...this.routes.values()]
     return this.routes.values()
@@ -57,10 +51,6 @@ class RouteManager {
       .toArray()
   }
 
-  /**
-   * Atribui um pedido a um motorista e um veículo.
-   * @returns O Id da rota a qual o pedido é atribuido.
-   */
   public loadOrder(operatorId: string, orderId: number, driverId: string, vehicleId: string): Result<string, LoadOrderError> {
     const operator = userManager.getActive(operatorId)
     if (!operator) return Err('noSuchOperator')
@@ -74,24 +64,20 @@ class RouteManager {
     const vehicle = vehicleManager.getActive(vehicleId)
     if (!vehicle) return Err('noSuchVehicle')
     
-    let routeId: string = crypto.randomUUID() // Por padrão o id da rota será um novo valor.
+    let routeId: string = crypto.randomUUID()
 
-    // Precisam estar em estados válidos.
     if (order.status != 'inPreparation') return Err('orderNotInPreparation')
     if (driver.status == 'onRoute' || vehicle.status == 'onRoute') return Err('vehicleOrDriverOnRoute')
     if (driver.status != vehicle.status) return Err('vehicleAndDriverInDifferentStatus')
 
-    // Precisam ter as licenças necessárias.
     if (!canDeliver(order, driver, vehicle)) return Err('vehicleOrDriverMissingLicense')
 
-    // Pode atribuir a um motorista e veículo livres ou já ocupados.
     if (driver.status == 'waitingOperatorOrder' && vehicle.status == 'waitingOperatorOrder') {
       const route = this.get(driver.routeId)!
       routeId = route.id
       if (route.vehicleId != vehicleId) return Err('driverVehicleMissmatch')
       route.orders.push(orderId)
     } else {
-      // Caso ambos estejam livres deve criar uma nova rota.
       const route: Route = {
         id: routeId,
         createdOn: new Date().toISOString(),
@@ -99,7 +85,10 @@ class RouteManager {
         driverId,
         vehicleId,
         orders: [orderId],
-      }
+      } as Route
+
+      this.routes.set(route.id, route)
+
       userManager.updateDriverStatus(driverId, { status: 'waitingOperatorOrder', routeId: route.id })
       vehicleManager.updateStatus(vehicleId, { status: 'waitingOperatorOrder', routeId: route.id })
     }
@@ -115,9 +104,6 @@ class RouteManager {
     return Ok(routeId)
   }
 
-  /**
-   * Desatribui um pedido de sua respectiva rota.
-   */
   public unloadOrder(orderId: number): Result<'unloaded', 'orderNotInLoadedStatus' | 'noSuchOrder'> {
     const order = orderManager.get(orderId)
     if (!order) return Err('noSuchOrder')
@@ -125,7 +111,6 @@ class RouteManager {
     if (order.status != 'loaded') return Err('orderNotInLoadedStatus')
     const route = this.get(order.routeId)!
 
-    // Se for o único pedido da rota, deve deletar a rota e liberar o motorista e veículo.
     if (route.orders.length == 1) {
       userManager.updateDriverStatus(route.driverId, { status: 'free' })
       vehicleManager.updateStatus(route.vehicleId, { status: 'free' })
@@ -137,9 +122,6 @@ class RouteManager {
     return Ok('unloaded')
   }
 
-  /**
-   * Marca a rota como autorizada para dispachar.
-   */
   public authorizeDispatch(operatorId: string, routeId: string): Result<'authorized', 'noSuchOperator' | 'noSuchRoute' | 'routeNotWaitingOperator'> {
     const route = this.get(routeId)
     if (!route) return Err('noSuchRoute')
@@ -162,15 +144,12 @@ class RouteManager {
       status: 'readyToDispatch',
       dispatchApprovedBy: operatorId,
       dispatchApprovedOn: new Date().toISOString()
-    })
+    } as Route)
 
     this.saveRoutes()
     return Ok('authorized')
   }
 
-  /**
-   * Desmarca a rota como autorizada para dispachar.
-   */
   public unauthorizeDispatch(operatorId: string, routeId: string): Result<'unauthorized', 'noSuchOperator' | 'noSuchRoute' | 'routeNotYetAuthorized'> {
     const route = this.get(routeId)
     if (!route) return Err('noSuchRoute')
@@ -191,15 +170,12 @@ class RouteManager {
     this.routes.set(route.id, {
       ...route,
       status: 'waitingOperatorOrder',
-    })
+    } as Route)
 
     this.saveRoutes()
     return Ok('unauthorized')
   }
 
-  /**
-   * Confirma que o motorista começou o trajeto.
-   */
   public confirmDispatch(driverId: string): Result<'confirmed', 'noSuchDriver' | 'driverNotAuthorized'> {
     const driver = userManager.getActive(driverId)
     if (!driver || !isDriver(driver)) return Err('noSuchDriver')
@@ -222,7 +198,7 @@ class RouteManager {
       ...route,
       status: 'onCourse',
       dispatchedOn: new Date().toISOString()
-    })
+    } as Route)
     
     this.saveRoutes()
     return Ok('confirmed')
@@ -231,9 +207,31 @@ class RouteManager {
   public updateStatus(id: string, data: RouteStatus): Result<'ok', 'noSuchRoute'> {
     const route = this.routes.get(id)
     if (!route) return Err('noSuchRoute')
-    this.routes.set(id, {...route, ...data})
+    this.routes.set(id, {...route, ...data} as Route)
     this.saveRoutes()
     return Ok('ok')
+  }
+
+  public checkAndCompleteRoute(routeId: string): void {
+    const route = this.get(routeId)
+    if (!route || route.status === 'completed') return
+
+    let allFinished = true
+    for (const orderId of route.orders) {
+      const order = orderManager.get(orderId)
+      if (order && !['arrived', 'rejected', 'canceled', 'accident', 'returned'].includes(order.status)) {
+        allFinished = false
+        break
+      }
+    }
+
+    if (allFinished) {
+      this.routes.set(route.id, { ...route, status: 'completed', completedOn: new Date().toISOString() } as Route)
+      this.saveRoutes()
+
+      userManager.updateDriverStatus(route.driverId, { status: 'free' })
+      vehicleManager.updateStatus(route.vehicleId, { status: 'free' })
+    }
   }
 }
 

@@ -13,7 +13,7 @@ import Type from "typebox";
 
 export default function routeRouter(app: FastifyInstance) {
   app.get<{ Headers: { token: UUID }, Reply: string | RouteGetReply, Params: { id: UUID } }>(
-    "/routes/:uuid", {
+    "/routes/:id", {
     schema: requireTokenSchema(OrderGetSchema)
   }, (req, res) => {
     const token = req.headers.token
@@ -42,7 +42,8 @@ export default function routeRouter(app: FastifyInstance) {
     const token = req.headers.token
 
     const requester = authenticate(token)
-    if (requester.isErr || isDriver(requester.ok)) {
+    // Bloqueio isDriver removido para permitir leitura de rotas
+    if (requester.isErr) {
       res.status(401).send("not authorized")
       return
     } 
@@ -56,7 +57,7 @@ export default function routeRouter(app: FastifyInstance) {
   })
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/authorize-dispatch", {
+    "/routes/:id/authorize-dispatch", {
     schema: requireTokenSchema(Type.String())
   }, (req, res) => {
     const token = req.headers.token
@@ -77,7 +78,7 @@ export default function routeRouter(app: FastifyInstance) {
   })
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/unauthorize-dispatch", {
+    "/routes/:id/unauthorize-dispatch", {
     schema: requireTokenSchema(Type.String())
   }, (req, res) => {
     const token = req.headers.token
@@ -98,7 +99,7 @@ export default function routeRouter(app: FastifyInstance) {
   })
 
   app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/confirm-dispatch", {
+    "/routes/:id/confirm-dispatch", {
     schema: requireTokenSchema(Type.String())
   }, (req, res) => {
     const token = req.headers.token

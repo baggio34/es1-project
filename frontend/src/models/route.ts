@@ -1,12 +1,12 @@
 import type { Order } from './order'
 
-export type RouteStatus = 'waitingDispatch' | 'onCourse' | 'completed' | 'waitingOperatorOrder'
+export type RouteStatus = 'waitingOperatorOrder' | 'readyToDispatch' | 'onCourse' | 'completed'
 
 export interface Route {
   id: string
   driverId: string
   vehicleId: string
-  orderIds: string[]
+  orders: any[] // Trocado de 'orderIds' para 'orders'
   status: RouteStatus
 }
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import type { Route } from '../../models/route.ts'
-import type { Driver } from '../../models/driver.ts'
 import type { Vehicle } from '../../models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
@@ -10,7 +9,7 @@ import { getRouteStatusBadge } from '../../utils/formatters.tsx'
 
 export interface RouteListPageProps {
   routes: Route[]
-  drivers: any[]           // Flexibilizado, pois o endpoint /drivers retorna UserGetReply[]
+  drivers: any[]           
   vehicles: Vehicle[]         
   onReload: () => void
   onViewDetails: (id: string) => void
@@ -66,12 +65,13 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
             Filtrar Status:
           </span>
           <Select
-            style={{ width: '220px' }}
+            style={{ width: '250px' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos os Status' },
-              { value: 'waitingDispatch', label: 'Aguardando Despacho' },
+              { value: 'waitingOperatorOrder', label: 'Em Montagem (Aguard. Operador)' },
+              { value: 'readyToDispatch', label: 'Autorizada (Aguard. Saída)' },
               { value: 'onCourse', label: 'Em Curso' },
               { value: 'completed', label: 'Concluída' },
             ]}
@@ -100,34 +100,37 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
               </TableCell>
             </TableRow>
           ) : (
-            filteredRoutes.map((route) => (
-              <TableRow key={route.id}>
-                <TableCell>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.8125rem',
-                      fontWeight: 600,
-                      color: 'var(--color-primary)',
-                    }}
-                  >
-                    #{route.id.slice(0, 8)}
-                  </span>
-                </TableCell>
-                <TableCell style={{ fontWeight: 600 }}>
-                  {getDriverName(route.driverId)}
-                </TableCell>
-                <TableCell style={{ fontWeight: 600 }}>
-                  {getVehicleModel(route.vehicleId)}
-                </TableCell>
-                <TableCell>{getRouteStatusBadge(route.status)}</TableCell>
-                <TableCell style={{ color: 'var(--color-text-secondary)' }}>
-                  {route.orderIds.length} pedidos
-                </TableCell>
-                <TableCell style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                    {route.status === 'waitingDispatch' && (
-                      <>
+            filteredRoutes.map((route) => {
+              // Garante que o front-end conte os pedidos corretamente quer a propriedade se chame 'orders' ou 'orderIds'
+              const orderCount = route.orders?.length || (route as any).orderIds?.length || 0;
+
+              return (
+                <TableRow key={route.id}>
+                  <TableCell>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        color: 'var(--color-primary)',
+                      }}
+                    >
+                      #{route.id.slice(0, 8)}
+                    </span>
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>
+                    {getDriverName(route.driverId)}
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 600 }}>
+                    {getVehicleModel(route.vehicleId)}
+                  </TableCell>
+                  <TableCell>{getRouteStatusBadge(route.status)}</TableCell>
+                  <TableCell style={{ color: 'var(--color-text-secondary)' }}>
+                    {orderCount} pedidos
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                      {route.status === 'waitingOperatorOrder' && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -135,6 +138,8 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
                           title="Autorizar Saída"
                           onClick={() => onAuthorizeDispatch(route.id)}
                         />
+                      )}
+                      {route.status === 'readyToDispatch' && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -142,19 +147,19 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
                           title="Desautorizar Saída"
                           onClick={() => onUnauthorizeDispatch(route.id)}
                         />
-                      </>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Eye size={15} />}
-                      title="Ver Detalhes da Rota"
-                      onClick={() => onViewDetails(route.id)}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Eye size={15} />}
+                        title="Ver Detalhes da Rota"
+                        onClick={() => onViewDetails(route.id)}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })
           )}
         </TableBody>
       </Table>

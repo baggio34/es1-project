@@ -10,6 +10,8 @@ import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 
 export interface VehicleListPageProps {
   vehicles: Vehicle[]
+  routes?: any[]
+  drivers?: any[]
   onViewDetails: (id: string) => void
   onEdit: (id: string) => void
   onCreate: () => void
@@ -19,6 +21,8 @@ export interface VehicleListPageProps {
 
 export const VehicleListPage: React.FC<VehicleListPageProps> = ({
   vehicles,
+  routes,
+  drivers,
   onViewDetails,
   onEdit,
   onCreate,
@@ -78,7 +82,9 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             options={[
               { value: 'all', label: 'Todos os Status' },
               { value: 'free', label: 'Disponível' },
+              { value: 'waitingOperatorOrder', label: 'Em Montagem de Rota' },
               { value: 'waitingDispatch', label: 'Aguardando Despacho' },
+              { value: 'readyToDispatch', label: 'Aguardando Saída' },
               { value: 'onRoute', label: 'Em Rota' },
             ]}
           />
@@ -109,7 +115,10 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             </TableRow>
           ) : (
             filteredVehicles.map((vehicle) => {
-              const hasDriver = 'driverId' in vehicle && (vehicle as any).driverId
+              // Cruzamento de dados através da Rota Ativa
+              const activeRoute = routes?.find(r => r.id === (vehicle as any).routeId)
+              const driver = drivers?.find(d => d.username === activeRoute?.driverId)
+              const hasDriver = !!driver
 
               return (
                 <TableRow key={vehicle.plate}>
@@ -134,8 +143,8 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                   <TableCell>{getVehicleStatusBadge(vehicle.status)}</TableCell>
                   <TableCell>
                     {hasDriver ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                        ID {String((vehicle as any).driverId).slice(0, 8)}...
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
+                        @{driver.username}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)' }}>Nenhum</span>

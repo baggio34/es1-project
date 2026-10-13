@@ -4,7 +4,6 @@ import { userManager } from "./user.manager.ts"
 import { isClerk, isDriver, isManager, isOperator } from "@/lib/user.utils.ts"
 import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_operations.ts"
 import { routeManager } from "./route.manager.ts"
-import { deliveriesLeft } from "@/lib/transport.utils.ts"
 import assert from "assert"
 
 class OrderManager {
@@ -167,14 +166,6 @@ class OrderManager {
 
     const route = routeManager.get(order.routeId)!
     assert(route.status == 'onCourse')
-    
-    if (deliveriesLeft(route) == 1) {
-      routeManager.updateStatus(route.id, {
-        ...route,
-        status: 'completed',
-        completedOn: new Date().toISOString(),
-      })
-    }
 
     this.updateStatus(orderId, {
       ...order,
@@ -184,6 +175,10 @@ class OrderManager {
     })
 
     this.saveOrders()
+
+    // O pulo do gato: delega a responsabilidade de encerramento da rota para o RouteManager
+    routeManager.checkAndCompleteRoute(route.id)
+
     return Ok('reported')
   }
 
@@ -218,14 +213,6 @@ class OrderManager {
 
     const route = routeManager.get(order.routeId)!
     assert(route.status == 'onCourse')
-    
-    if (deliveriesLeft(route) == 1) {
-      routeManager.updateStatus(route.id, {
-        ...route,
-        status: 'completed',
-        completedOn: new Date().toISOString(),
-      })
-    }
 
     this.updateStatus(orderId, {
       ...order,
@@ -234,6 +221,10 @@ class OrderManager {
     })
 
     this.saveOrders()
+
+    // O pulo do gato: delega a responsabilidade de encerramento da rota para o RouteManager
+    routeManager.checkAndCompleteRoute(route.id)
+
     return Ok('confirmed')
   }
 }

@@ -15,7 +15,6 @@ import { useUser } from '../view_models/useUser.ts'
 // Pages
 import { DriverListPage } from './Drivers/DriverListPage.tsx'
 import { DriverDetailPage } from './Drivers/DriverDetailPage.tsx'
-// DriverFormPage removida pois a gestão é feita no UserFormPage
 
 import { VehicleListPage } from './Vehicles/VehicleListPage.tsx'
 import { VehicleDetailPage } from './Vehicles/VehicleDetailPage.tsx'
@@ -67,10 +66,11 @@ export default function App() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const { drivers, loadDrivers } = useDriver()
+  const { loadDrivers } = useDriver()
   const { vehicles, loadVehicles, registerVehicle, api: vehicleApi } = useVehicle()
   const { orders, loadOrders, api: orderApi } = useOrder()
-  const { routes, loadRoutes } = useRoute()
+  
+  const { routes, loadRoutes, api: routeApi } = useRoute()
   const { users, loadUsers, registerUser, api: userApi } = useUser()
   
   useEffect(() => {
@@ -100,20 +100,21 @@ export default function App() {
   
   const safeVehicles = Array.isArray(vehicles) ? vehicles : []
   
-  // Utilizadores globais
   const safeUsers = Array.isArray(users) ? users : []
-  
-  // Para a página de motoristas (DriverListPage), garantimos que passamos os utilizadores filtrados pelo papel 'driver'
-  const allDrivers = safeUsers.filter(u => u.role === 'driver' || u.role === 'Driver')
+  const allDrivers = safeUsers.filter(u => u.role === 'driver')
 
   const userRole = user?.role?.toLowerCase()
+
+  // Extração da rota ativa e pedidos do motorista logado
+  const activeDriverRoute = mappedRoutes.find(r => r.driverId === user?.username && r.status !== 'completed')
+  const activeDriverOrders = activeDriverRoute ? mappedOrders.filter(o => activeDriverRoute.orders?.includes(o.id) || activeDriverRoute.orders?.includes(String(o.id))) : []
+  const pastDriverRoutes = mappedRoutes.filter(r => r.driverId === user?.username && r.status === 'completed')
 
   return (
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
 
-        {/* Passa a contagem correta para o AppLayout */}
         <Route path="/" element={<AppLayout counts={{ orders: mappedOrders.length, vehicles: safeVehicles.length, drivers: allDrivers.length }} />}>
           
           <Route index element={<Navigate to={userRole === 'driver' ? '/driver-routes' : '/orders'} replace />} />
@@ -122,34 +123,86 @@ export default function App() {
             <Route path="orders">
               <Route index element={<OrderListPage orders={mappedOrders} onViewDetails={(id) => navigate(`/orders/${id}`)} onEdit={(id) => navigate(`/orders/${id}/edit`)} onCreate={() => navigate('/orders/create')} onDelete={async (id, reason) => { await orderApi.cancel(id, { reason }); loadOrders() }} onReload={loadOrders} />} />
               <Route path="create" element={<OrderFormPage onSave={async (data) => { await orderApi.create(data as any); loadOrders(); navigate('/orders'); }} onCancel={() => navigate('/orders')} />} />
-              <Route path=":id" element={<OrderDetailWrapper orders={mappedOrders} orderApi={orderApi} loadOrders={loadOrders} />} />
+              <Route path=":id" element={<OrderDetailWrapper orders={mappedOrders} orderApi={orderApi} loadOrders={loadOrders} loadRoutes={loadRoutes} loadDrivers={loadDrivers} loadVehicles={loadVehicles} />} />
               <Route path=":id/edit" element={<OrderFormWrapper orders={mappedOrders} onSave={async (data: any, id: string) => { await orderApi.patch(id, data); loadOrders() }} />} />
             </Route>
 
             <Route path="vehicles">
-              <Route index element={<VehicleListPage vehicles={safeVehicles} onViewDetails={(id) => navigate(`/vehicles/${id}`)} onEdit={(id) => navigate(`/vehicles/${id}/edit`)} onCreate={() => navigate('/vehicles/create')} onDelete={async () => {}} onReload={loadVehicles} />} />
+              <Route index element={<VehicleListPage vehicles={safeVehicles} routes={mappedRoutes} drivers={allDrivers} onViewDetails={(id) => navigate(`/vehicles/${id}`)} onEdit={(id) => navigate(`/vehicles/${id}/edit`)} onCreate={() => navigate('/vehicles/create')} onDelete={async () => {}} onReload={loadVehicles} />} />
               <Route path="create" element={<VehicleFormPage onSave={async (data) => { await registerVehicle(data); navigate('/vehicles'); }} onCancel={() => navigate('/vehicles')} />} />
-              <Route path=":id" element={<VehicleDetailWrapper vehicles={safeVehicles} />} />
+              <Route path=":id" element={<VehicleDetailWrapper vehicles={safeVehicles} routes={mappedRoutes} drivers={allDrivers} />} />
               <Route path=":id/edit" element={<VehicleFormWrapper vehicles={safeVehicles} onSave={async (data: any, id: string) => { await vehicleApi.patch(id, data); loadVehicles() }} />} />
             </Route>
 
             <Route path="drivers">
-              {/* O DriverListPage agora recebe a lista unificada de motoristas vinda dos utilizadores. 
-                  Os botões onCreate e onEdit apontam para as páginas de gestão de utilizador. */}
-              <Route index element={<DriverListPage drivers={allDrivers as any} onViewDetails={(id) => navigate(`/drivers/${id}`)} onEdit={(id) => navigate(`/users/${id}/edit`)} onCreate={() => navigate('/users/create')} onDelete={async () => {}} onReload={loadUsers} />} />
-              <Route path=":id" element={<DriverDetailWrapper drivers={allDrivers} />} />
+              <Route index element={<DriverListPage drivers={allDrivers as any} routes={mappedRoutes} vehicles={safeVehicles} onViewDetails={(id) => navigate(`/drivers/${id}`)} onEdit={(id) => navigate(`/users/${id}/edit`)} onCreate={() => navigate('/users/create')} onDelete={async () => {}} onReload={loadUsers} />} />
+              <Route path=":id" element={<DriverDetailWrapper drivers={allDrivers} routes={mappedRoutes} vehicles={safeVehicles} />} />
             </Route>
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'operator', 'Operator']} />}>
             <Route path="routes">
-              <Route index element={<RouteListPage routes={mappedRoutes} drivers={allDrivers as any} vehicles={safeVehicles} onReload={loadRoutes} onViewDetails={(id) => navigate(`/routes/${id}`)} onAuthorizeDispatch={() => {}} onUnauthorizeDispatch={() => {}} />} />
-              <Route path=":id" element={<RouteDetailWrapper routes={mappedRoutes} orders={mappedOrders} />} />
+              <Route index element={
+                <RouteListPage 
+                  routes={mappedRoutes} 
+                  drivers={allDrivers as any} 
+                  vehicles={safeVehicles} 
+                  onReload={loadRoutes} 
+                  onViewDetails={(id) => navigate(`/routes/${id}`)} 
+                  onAuthorizeDispatch={async (id) => {
+                    await routeApi.authorizeDispatch(id)
+                    await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
+                  }} 
+                  onUnauthorizeDispatch={async (id) => {
+                    await routeApi.unauthorizeDispatch(id)
+                    await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
+                  }} 
+                />
+              } />
+              <Route path=":id" element={<RouteDetailWrapper routes={mappedRoutes} orders={mappedOrders} routeApi={routeApi} loadRoutes={loadRoutes} loadOrders={loadOrders} loadVehicles={loadVehicles} loadDrivers={loadDrivers} />} />
             </Route>
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'operator', 'Operator', 'driver', 'Driver']} />}>
-            <Route path="driver-routes" element={<DriverRoutesPage pastRoutes={mappedRoutes.filter(r => r?.status === 'completed')} onViewOrderDetails={(id) => navigate(`/orders/${id}`)} onViewRouteDetails={(id) => navigate(`/routes/${id}`)} />} />
+            <Route path="driver-routes" element={
+              <DriverRoutesPage 
+                currentRoute={activeDriverRoute}
+                currentOrders={activeDriverOrders}
+                pastRoutes={pastDriverRoutes} 
+                onConfirmDispatch={async (id) => {
+                  try {
+                    await routeApi.confirmDispatch(id);
+                    await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()]);
+                  } catch (err: any) {
+                    alert(`Erro ao iniciar percurso: ${err.message}`);
+                  }
+                }}
+                onConfirmArrival={async (orderId) => {
+                  try {
+                    await orderApi.confirmArrival(Number(orderId));
+                    await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()]);
+                  } catch (err: any) {
+                    alert(`Erro ao confirmar entrega: ${err.message}`);
+                  }
+                }}
+                onReportAccident={async (orderId) => {
+                  try {
+                    const reason = prompt('Descreva o motivo do acidente/problema:');
+                    if (reason) {
+                      await orderApi.reportAccident(Number(orderId), { accidentMessage: reason });
+                      await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()]);
+                    }
+                  } catch (err: any) {
+                    alert(`Erro ao reportar acidente: ${err.message}`);
+                  }
+                }}
+                onViewOrderDetails={(id) => navigate(`/orders/${id}`)} 
+                onViewRouteDetails={(id) => navigate(`/routes/${id}`)} 
+                onReload={async () => {
+                  await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()]);
+                }}
+              />
+            } />
           </Route>
           
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager']} />}>
@@ -176,10 +229,10 @@ export default function App() {
 }
 
 // --- Componentes Wrappers ---
-function OrderDetailWrapper({ orders, orderApi, loadOrders }: { orders: any[], orderApi: any, loadOrders: () => void }) {
+function OrderDetailWrapper({ orders, orderApi, loadOrders, loadRoutes, loadDrivers, loadVehicles }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const order = orders.find(o => o?.id === id || String(o?.id) === String(id))
+  const order = orders.find((o: any) => o?.id === id || String(o?.id) === String(id))
   
   if (!order) return <div>Pedido não encontrado.</div>
 
@@ -197,7 +250,15 @@ function OrderDetailWrapper({ orders, orderApi, loadOrders }: { orders: any[], o
         case 'confirm-arrival': await orderApi.confirmArrival(orderId); break;
         default: console.warn('Ação desconhecida:', actionType);
       }
-      loadOrders()
+      
+      // FIX: Aguardar que todo o estado global do back-end chegue antes de re-renderizar
+      await Promise.allSettled([
+        loadOrders(),
+        loadRoutes(),
+        loadDrivers(),
+        loadVehicles()
+      ])
+      
     } catch (err: any) {
       alert(`Falha ao executar ação: ${err.message || 'Erro desconhecido.'}`)
     }
@@ -209,48 +270,82 @@ function OrderDetailWrapper({ orders, orderApi, loadOrders }: { orders: any[], o
 function OrderFormWrapper({ orders, onSave }: { orders: any[], onSave: (data: any, id: string) => Promise<void> }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const order = orders.find(o => o?.id === id || String(o?.id) === String(id))
+  const order = orders.find((o: any) => o?.id === id || String(o?.id) === String(id))
   if (!order) return <div>Pedido não encontrado para edição.</div>
   return <OrderFormPage initialOrder={order} onSave={async (data) => { await onSave(data, id as string); navigate('/orders'); }} onCancel={() => navigate('/orders')} />
 }
 
-function VehicleDetailWrapper({ vehicles }: { vehicles: any[] }) {
+function VehicleDetailWrapper({ vehicles, routes, drivers }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const vehicle = vehicles.find(v => v?.id === id || v?.plate === id)
+  const vehicle = vehicles.find((v: any) => v?.id === id || v?.plate === id)
   if (!vehicle) return <div>Veículo não encontrado.</div>
-  return <VehicleDetailPage vehicle={vehicle} onBack={() => navigate('/vehicles')} onEdit={() => navigate(`/vehicles/${id}/edit`)} onViewRoute={(routeId) => navigate(`/routes/${routeId}`)} />
+  return <VehicleDetailPage vehicle={vehicle} routes={routes} drivers={drivers} onBack={() => navigate('/vehicles')} onEdit={() => navigate(`/vehicles/${id}/edit`)} onViewRoute={(routeId) => navigate(`/routes/${routeId}`)} />
 }
 
 function VehicleFormWrapper({ vehicles, onSave }: { vehicles: any[], onSave: (data: any, id: string) => Promise<void> }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const vehicle = vehicles.find(v => v?.id === id || v?.plate === id)
+  const vehicle = vehicles.find((v: any) => v?.id === id || v?.plate === id)
   if (!vehicle) return <div>Veículo não encontrado para edição.</div>
   return <VehicleFormPage initialVehicle={vehicle} onSave={async (data) => { await onSave(data, id as string); navigate('/vehicles'); }} onCancel={() => navigate('/vehicles')} />
 }
 
-function DriverDetailWrapper({ drivers }: { drivers: any[] }) {
+function DriverDetailWrapper({ drivers, routes, vehicles }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const driver = drivers.find(d => d?.id === id || d?.username === id)
+  const driver = drivers.find((d: any) => d?.id === id || d?.username === id)
   if (!driver) return <div>Motorista não encontrado.</div>
-  return <DriverDetailPage driver={driver} onBack={() => navigate('/drivers')} onEdit={() => navigate(`/users/${id}/edit`)} onViewRoute={(routeId) => navigate(`/routes/${routeId}`)} />
+  return <DriverDetailPage driver={driver} routes={routes} vehicles={vehicles} onBack={() => navigate('/drivers')} onEdit={() => navigate(`/users/${id}/edit`)} onViewRoute={(routeId) => navigate(`/routes/${routeId}`)} />
 }
 
-function RouteDetailWrapper({ routes, orders }: { routes: any[], orders: any[] }) {
+function RouteDetailWrapper({ routes, orders, routeApi, loadRoutes, loadOrders, loadVehicles, loadDrivers }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const route = routes.find(r => r?.id === id)
+  const route = routes.find((r: any) => r?.id === id)
+  
   if (!route) return <div>Rota não encontrada.</div>
-  const routeOrders = orders.filter(o => route.orderIds?.includes(o?.id) || route.orderIds?.includes(String(o?.id)))
-  return <RouteDetailPage route={route} orders={routeOrders} onBack={() => navigate('/routes')} onViewOrder={(id) => navigate(`/orders/${id}`)} onViewDriver={(id) => navigate(`/drivers/${id}`)} onViewVehicle={(id) => navigate(`/vehicles/${id}`)} />
+  
+  const routeOrders = orders.filter((o: any) => route.orders?.includes(o?.id) || route.orders?.includes(String(o?.id)))
+  
+  const handleAuthorize = async (routeId: string) => {
+    try {
+      await routeApi.authorizeDispatch(routeId)
+      // FIX: Sincronização estrita de estado após ação
+      await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
+    } catch (err: any) {
+      alert(`Erro ao autorizar: ${err.message}`)
+    }
+  }
+
+  const handleUnauthorize = async (routeId: string) => {
+    try {
+      await routeApi.unauthorizeDispatch(routeId)
+      // FIX: Sincronização estrita de estado após ação
+      await Promise.allSettled([loadRoutes(), loadVehicles(), loadDrivers(), loadOrders()])
+    } catch (err: any) {
+      alert(`Erro ao desautorizar: ${err.message}`)
+    }
+  }
+
+  return (
+    <RouteDetailPage 
+      route={route} 
+      orders={routeOrders} 
+      onBack={() => navigate('/routes')} 
+      onViewOrder={(id) => navigate(`/orders/${id}`)} 
+      onViewDriver={(id) => navigate(`/drivers/${id}`)} 
+      onViewVehicle={(id) => navigate(`/vehicles/${id}`)}
+      onAuthorizeDispatch={handleAuthorize}
+      onUnauthorizeDispatch={handleUnauthorize}
+    />
+  )
 }
 
 function UserDetailWrapper({ users }: { users: any[] }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const userObj = users.find(u => u?.username === id || u?.id === id)
+  const userObj = users.find((u: any) => u?.username === id || u?.id === id)
   if (!userObj) return <div>Usuário não encontrado.</div>
   return <UserDetailPage user={userObj} onBack={() => navigate('/users')} onEdit={() => navigate(`/users/${id}/edit`)} />
 }
@@ -258,7 +353,7 @@ function UserDetailWrapper({ users }: { users: any[] }) {
 function UserFormWrapper({ users, onSave }: { users: any[], onSave: (data: any, username: string) => Promise<void> }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const userObj = users.find(u => u?.username === id || u?.id === id)
+  const userObj = users.find((u: any) => u?.username === id || u?.id === id)
   if (!userObj) return <div>Usuário não encontrado para edição.</div>
   return <UserFormPage initialUser={userObj} onSave={async (data) => { await onSave(data, userObj.username); navigate(-1); }} onCancel={() => navigate(-1)} />
 }
