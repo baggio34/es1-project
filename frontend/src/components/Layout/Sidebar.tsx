@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Package, Truck, Users, ShieldCheck, Map, UserCog, Navigation } from 'lucide-react'
+import { Package, Truck, Users, ShieldCheck, Map, UserCog, Navigation, Award } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 export interface SidebarProps {
@@ -60,6 +60,13 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       path: '/users',
       label: 'Gerenciar Usuários',
       icon: <UserCog size={18} />,
+      allowedRoles: ['admin', 'manager'],
+    },
+    {
+      id: 'licenses',
+      path: '/licenses',
+      label: 'Gerenciar Licenças',
+      icon: <Award size={18} />,
       allowedRoles: ['admin', 'manager'],
     },
   ];

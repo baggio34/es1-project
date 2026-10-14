@@ -17,6 +17,7 @@ export interface ModalProps {
   children: React.ReactNode
   confirmText?: string
   confirmVariant?: 'default' | 'destructive'
+  confirmDisabled?: boolean
   onConfirm?: () => void
 }
 
@@ -28,6 +29,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   confirmText = 'Confirmar',
   confirmVariant = 'default',
+  confirmDisabled = false,
   onConfirm,
 }) => {
   return (
@@ -45,7 +47,7 @@ export const Modal: React.FC<ModalProps> = ({
             Cancelar
           </Button>
           {onConfirm && (
-            <Button variant={confirmVariant} onClick={onConfirm}>
+            <Button variant={confirmVariant} onClick={onConfirm} disabled={confirmDisabled}>
               {confirmText}
             </Button>
           )}

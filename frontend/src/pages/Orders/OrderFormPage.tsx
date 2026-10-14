@@ -79,6 +79,13 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
 
     setIsSubmitting(true)
 
+    const selectEl = document.getElementById('order-license-select') as HTMLSelectElement | null
+    const pendingLicense = selectEl?.value
+    const finalLicenses = [...requiredLicenses]
+    if (pendingLicense && !finalLicenses.includes(pendingLicense)) {
+      finalLicenses.push(pendingLicense)
+    }
+
     try {
       await onSave({
         description: description.trim(),
@@ -89,7 +96,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
         volume: Number(volume),
         value: Number(value),
         shipmentPrice: Number(shipmentPrice),
-        licenses: requiredLicenses,
+        licenses: finalLicenses,
         ...(isEditing ? { status } : {}),
         ...(isEditing && status === 'rejected' ? { reason: reason.trim() } : {}),
       })
@@ -357,6 +364,12 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   }}
                   defaultValue=""
                   disabled={isSubmitting || loadingLicenses}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleAddLicense(e.target.value)
+                      e.target.value = ''
+                    }
+                  }}
                 >
                   <option value="" disabled>Selecione uma licença para adicionar...</option>
                   {dbLicenses.filter((l) => !requiredLicenses.includes(l.name)).map((l) => (

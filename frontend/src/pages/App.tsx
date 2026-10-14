@@ -33,6 +33,7 @@ import { LoginPage } from './Login/LoginPage.tsx'
 import { UserListPage } from './Users/UserListPage.tsx'
 import { UserDetailPage } from './Users/UserDetailPage.tsx'
 import { UserFormPage } from './Users/UserFormPage.tsx'
+import { LicenseListPage } from './Licenses/LicenseListPage.tsx'
 
 // === BLINDAGEM DE ERROS (ERROR BOUNDARY) ===
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
@@ -141,7 +142,7 @@ export default function App() {
 
           {/* ROTA DE DETALHES DE PEDIDOS COMPARTILHADA (Incluindo Motoristas) */}
           <Route element={<ProtectedRoute allowedRoles={['admin', 'Admin', 'manager', 'Manager', 'clerk', 'Clerk', 'operator', 'Operator', 'driver', 'Driver']} />}>
-             <Route path="orders/:id" element={<OrderDetailWrapper orders={mappedOrders} routes={mappedRoutes} vehicles={safeVehicles} users={safeUsers} orderApi={orderApi} loadOrders={loadOrders} loadRoutes={loadRoutes} loadDrivers={loadDrivers} loadVehicles={loadVehicles} />} />
+             <Route path="orders/:id" element={<OrderDetailWrapper orders={mappedOrders} routes={mappedRoutes} vehicles={safeVehicles} users={safeUsers} drivers={allDrivers} orderApi={orderApi} loadOrders={loadOrders} loadRoutes={loadRoutes} loadDrivers={loadDrivers} loadVehicles={loadVehicles} />} />
           </Route>
 
           {/* ROTAS GERAIS DE ROTAS (Apenas listagem) */}
@@ -221,6 +222,10 @@ export default function App() {
               <Route path=":id" element={<UserDetailWrapper users={safeUsers} />} />
               <Route path=":id/edit" element={<UserFormWrapper users={safeUsers} onSave={async (data: any, username: string) => { await userApi.patch(username, data); loadUsers(); }} />} />
             </Route>
+
+            <Route path="licenses">
+              <Route index element={<LicenseListPage />} />
+            </Route>
           </Route>
           
         </Route>
@@ -238,7 +243,7 @@ export default function App() {
 }
 
 // --- Componentes Wrappers ---
-function OrderDetailWrapper({ orders, routes, vehicles, users, orderApi, loadOrders, loadRoutes, loadDrivers, loadVehicles }: any) {
+function OrderDetailWrapper({ orders, routes, vehicles, users, drivers, orderApi, loadOrders, loadRoutes, loadDrivers, loadVehicles }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth() 
@@ -308,6 +313,8 @@ function OrderDetailWrapper({ orders, routes, vehicles, users, orderApi, loadOrd
       route={activeRoute} 
       vehicle={vehicleObj} 
       users={usersMap} 
+      drivers={drivers}
+      vehicles={vehicles}
       onBack={handleBackNavigation} 
       onEdit={() => navigate(`/orders/${id}/edit`)} 
       onViewRoute={(routeId) => navigate(`/routes/${routeId}`)}

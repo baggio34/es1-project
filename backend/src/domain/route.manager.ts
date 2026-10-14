@@ -18,6 +18,8 @@ type LoadOrderError =
   | 'vehicleAndDriverInDifferentStatus'
   | 'driverVehicleMissmatch'
   | 'vehicleOrDriverMissingLicense'
+  | 'vehicleCapacityExceeded'
+  | 'vehicleVolumeExceeded'
 
 class RouteManager {
   routes = new Map<string, Route>()
@@ -71,6 +73,30 @@ class RouteManager {
     if (driver.status != vehicle.status) return Err('vehicleAndDriverInDifferentStatus')
 
     if (!canDeliver(order, driver, vehicle)) return Err('vehicleOrDriverMissingLicense')
+
+    let currentWeight = 0
+    let currentVolume = 0
+
+    if (driver.status == 'waitingOperatorOrder' && vehicle.status == 'waitingOperatorOrder') {
+      const existingRoute = this.get(driver.routeId)
+      if (existingRoute) {
+        for (const existingId of existingRoute.orders) {
+          const ord = orderManager.get(existingId)
+          if (ord) {
+            currentWeight += ord.weight || 0
+            currentVolume += ord.volume || 0
+          }
+        }
+      }
+    }
+
+    if ((currentWeight + order.weight) > vehicle.maxLoad) {
+      return Err('vehicleCapacityExceeded')
+    }
+
+    if ((currentVolume + order.volume) > vehicle.internalVolume) {
+      return Err('vehicleVolumeExceeded')
+    }
 
     if (driver.status == 'waitingOperatorOrder' && vehicle.status == 'waitingOperatorOrder') {
       const route = this.get(driver.routeId)!

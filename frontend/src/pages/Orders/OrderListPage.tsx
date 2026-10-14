@@ -146,7 +146,30 @@ export const OrderListPage: React.FC<OrderListPageProps> = ({
                     #{order.id}
                   </span>
                 </TableCell>
-                <TableCell style={{ fontWeight: 600 }}>{order.description}</TableCell>
+                <TableCell style={{ fontWeight: 600 }}>
+                  <div>{order.description}</div>
+                  {order.licenses && order.licenses.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.35rem' }}>
+                      {order.licenses.map((lic: string) => (
+                        <span
+                          key={lic}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: 'var(--radius-sm)',
+                            backgroundColor: 'rgba(30, 64, 175, 0.1)',
+                            color: 'var(--color-primary)',
+                          }}
+                        >
+                          {lic}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{order.clientName}</TableCell>
                 <TableCell style={{ maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={order.destination}>
                   {order.destination}

@@ -14,6 +14,8 @@ export interface OrderDetailPageProps {
   route?: { id?: string; driverId: string; vehicleId: string }
   vehicle?: { plate: string; model: string }
   users?: Record<string, string>
+  drivers?: any[]
+  vehicles?: any[]
   onBack: () => void
   onEdit: (id: number) => void
   onViewRoute?: (routeId: string) => void
@@ -35,6 +37,8 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   route,
   vehicle,
   users,
+  drivers = [],
+  vehicles = [],
   onBack,
   onEdit,
   onViewRoute,
@@ -42,8 +46,8 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
 }) => {
   const { user } = useAuth()
   const userRole = user?.role?.toLowerCase()
-  // Apenas Admin e Manager podem alterar os status ou cancelar
-  const canManageStatus = ['admin', 'manager'].includes(userRole || '')
+  // Admin, Manager e Operator podem gerenciar ações operacionais de pedidos
+  const canManageStatus = ['admin', 'manager', 'operator'].includes(userRole || '')
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -350,26 +354,183 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </Card>
       </div>
 
-      <Modal
-        isOpen={loadModalOpen}
-        onClose={() => setLoadModalOpen(false)}
-        title="Carregar Pedido"
-        description="Atribua um motorista e um veículo para iniciar o carregamento deste pedido."
-        confirmText="Confirmar Carregamento"
-        onConfirm={() => {
-          onAction?.('load', order.id, { driverId: loadDriverId, vehicleId: loadVehicleId.toUpperCase() })
-          setLoadModalOpen(false)
-        }}
-      >
-        <div className="ui-form-group">
-          <label className="ui-label">Nome de Usuário do Motorista</label>
-          <Input placeholder="Ex: joao.motorista" value={loadDriverId} onChange={(e) => setLoadDriverId(e.target.value)} />
-        </div>
-        <div className="ui-form-group" style={{ marginTop: '1rem' }}>
-          <label className="ui-label">ID do Veículo (UUID ou Placa)</label>
-          <Input placeholder="Ex: ABC1D23" value={loadVehicleId} onChange={(e) => setLoadVehicleId(e.target.value)} />
-        </div>
-      </Modal>
+      {(() => {
+        const activeDrivers = (drivers || []).filter((d: any) => d.condition !== 'deactivated')
+        const activeVehicles = (vehicles || []).filter((v: any) => v.condition !== 'deactivated')
+
+        const selectedVehicleObj = activeVehicles.find((v: any) => v.plate === loadVehicleId || v.id === loadVehicleId)
+        const selectedDriverObj = activeDrivers.find((d: any) => d.username === loadDriverId || d.id === loadDriverId)
+
+        const requiredLicenses: string[] = order.licenses || (order as any).requiredLicenses || []
+
+        // Validação de Peso (Carga)
+        const isWeightExceeded = !!selectedVehicleObj && (Number(order.weight) > Number(selectedVehicleObj.maxLoad))
+
+        // Validação de Volume
+        const isVolumeExceeded = !!selectedVehicleObj && (Number(order.volume) > Number(selectedVehicleObj.internalVolume))
+
+        // Validação de Licenças do Veículo
+        const vehicleLicenses: string[] = selectedVehicleObj?.licenses || []
+        const missingVehicleLicenses = requiredLicenses.filter(lic => !vehicleLicenses.includes(lic))
+        const isVehicleMissingLicense = !!selectedVehicleObj && missingVehicleLicenses.length > 0
+
+        // Validação de Licenças do Condutor
+        const driverLicenses: string[] = selectedDriverObj?.licenses || []
+        const missingDriverLicenses = requiredLicenses.filter(lic => !driverLicenses.includes(lic))
+        const isDriverMissingLicense = !!selectedDriverObj && missingDriverLicenses.length > 0
+
+        const hasCapacityError = isWeightExceeded || isVolumeExceeded
+        const hasLicenseError = isVehicleMissingLicense || isDriverMissingLicense
+
+        const canConfirmLoad = Boolean(
+          loadDriverId && 
+          loadVehicleId && 
+          !hasCapacityError && 
+          !hasLicenseError
+        )
+
+        return (
+          <Modal
+            isOpen={loadModalOpen}
+            onClose={() => setLoadModalOpen(false)}
+            title="Carregar Pedido em Veículo"
+            description="Selecione o motorista e o veículo adequados para realizar a entrega desta carga."
+            confirmText="Confirmar Carregamento"
+            confirmDisabled={!canConfirmLoad}
+            onConfirm={() => {
+              if (!canConfirmLoad) return
+              onAction?.('load', order.id, { driverId: loadDriverId, vehicleId: loadVehicleId.toUpperCase() })
+              setLoadModalOpen(false)
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Resumo de Requisitos da Carga */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '0.5rem',
+                padding: '0.75rem',
+                backgroundColor: 'var(--color-bg-subtle)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                fontSize: '0.8125rem'
+              }}>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)', display: 'block' }}>Peso do Pedido:</span>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--color-text-primary)' }}>{order.weight} kg</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)', display: 'block' }}>Volume do Pedido:</span>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--color-text-primary)' }}>{order.volume} m³</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)', display: 'block' }}>Licenças Exigidas:</span>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--color-text-primary)' }}>
+                    {requiredLicenses.length > 0 ? requiredLicenses.join(', ') : 'Nenhuma'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Select de Motorista */}
+              <div className="ui-form-group">
+                <label className="ui-label" style={{ fontWeight: 600 }}>Motorista Responsável *</label>
+                <select
+                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  value={loadDriverId}
+                  onChange={(e) => setLoadDriverId(e.target.value)}
+                >
+                  <option value="">Selecione um motorista...</option>
+                  {activeDrivers.map((d: any) => {
+                    const isBusy = d.status === 'onRoute'
+                    const statusLabel = isBusy ? ' (Em Rota - Indisponível)' : d.status === 'waitingOperatorOrder' ? ' (Em Montagem de Rota)' : ' (Disponível)'
+                    return (
+                      <option key={d.username} value={d.username} disabled={isBusy}>
+                        {d.name} (@{d.username}){statusLabel}
+                      </option>
+                    )
+                  })}
+                </select>
+                {isDriverMissingLicense && (
+                  <div style={{ marginTop: '0.35rem', color: 'var(--color-danger-text)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <AlertTriangle size={14} />
+                    <span>Motorista selecionado não possui as licenças: {missingDriverLicenses.join(', ')}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Select de Veículo */}
+              <div className="ui-form-group">
+                <label className="ui-label" style={{ fontWeight: 600 }}>Veículo de Transporte *</label>
+                <select
+                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  value={loadVehicleId}
+                  onChange={(e) => setLoadVehicleId(e.target.value)}
+                >
+                  <option value="">Selecione um veículo com capacidade suficiente...</option>
+                  {activeVehicles.map((v: any) => {
+                    const isBusy = v.status === 'onRoute'
+                    const isUnderWeight = Number(order.weight) > Number(v.maxLoad)
+                    const isUnderVolume = Number(order.volume) > Number(v.internalVolume)
+                    const capacityWarning = (isUnderWeight || isUnderVolume) ? ' ⚠️ [Capacidade Insuficiente]' : ''
+                    const statusLabel = isBusy ? ' (Em Rota - Indisponível)' : capacityWarning
+                    return (
+                      <option key={v.plate} value={v.plate} disabled={isBusy}>
+                        {v.plate} - {v.model} (Carga: {v.maxLoad}kg | Vol: {v.internalVolume}m³){statusLabel}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+
+              {/* Feedback de Validação do Veículo Selecionado */}
+              {selectedVehicleObj && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  padding: '0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: `1px solid ${hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
+                  backgroundColor: hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.05)' : 'rgba(34, 197, 94, 0.05)',
+                  fontSize: '0.8125rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Capacidade de Carga ({selectedVehicleObj.maxLoad} kg máx):</span>
+                    {isWeightExceeded ? (
+                      <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
+                        Insuficiente ({order.weight} kg &gt; {selectedVehicleObj.maxLoad} kg)
+                      </span>
+                    ) : (
+                      <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                        Compatível ({order.weight} kg / {selectedVehicleObj.maxLoad} kg)
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Capacidade Volumétrica ({selectedVehicleObj.internalVolume} m³ máx):</span>
+                    {isVolumeExceeded ? (
+                      <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
+                        Insuficiente ({order.volume} m³ &gt; {selectedVehicleObj.internalVolume} m³)
+                      </span>
+                    ) : (
+                      <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                        Compatível ({order.volume} m³ / {selectedVehicleObj.internalVolume} m³)
+                      </span>
+                    )}
+                  </div>
+
+                  {isVehicleMissingLicense && (
+                    <div style={{ color: 'var(--color-danger-text)', fontWeight: 500, marginTop: '0.25rem' }}>
+                      Veículo não possui as licenças: {missingVehicleLicenses.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Modal>
+        )
+      })()}
 
       <Modal
         isOpen={rejectModalOpen}

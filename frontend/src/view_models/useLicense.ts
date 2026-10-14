@@ -25,10 +25,15 @@ export function useLicense() {
     await loadLicenses()
   }
 
+  const updateLicense = async (slug: string, data: LicenseCreationPayload) => {
+    await licenseApi.update(slug, data)
+    await loadLicenses()
+  }
+
   const deleteLicense = async (slug: string) => {
     await licenseApi.delete(slug)
     await loadLicenses()
   }
 
-  return { licenses, loading, error, loadLicenses, createLicense, deleteLicense }
+  return { licenses, loading, error, loadLicenses, createLicense, updateLicense, deleteLicense }
 }

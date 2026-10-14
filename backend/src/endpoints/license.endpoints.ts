@@ -43,6 +43,58 @@ export default function licenseRouter(app: FastifyInstance) {
     res.status(200).send(licenses)
   })
 
+  app.put<{ Body: LicenseCreationPayload, Headers: { token: UUID }, Params: { slug: string } }>(
+    "/licenses/:slug", {
+    schema: { ...payloadRequireTokenSchema(LicenseCreationSchema, Type.String()), params: Type.Object({ slug: Type.String() }) }
+  }, (req, res) => {
+    const data = req.body
+    const slug = req.params.slug
+    const user = authenticate(req.headers.token)
+
+    if (user.isErr || !isManager(user.ok)) {
+      res.status(401).send("not authorized")
+      return
+    }
+
+    const result = licenseManager.update(slug, data.name)
+    if (result.isErr) {
+      if (result.err === 'noSuchLicense') {
+        res.status(404).send("no such license")
+      } else {
+        res.status(400).send("this license already exists")
+      }
+      return
+    }
+
+    res.status(200).send("updated")
+  })
+
+  app.patch<{ Body: LicenseCreationPayload, Headers: { token: UUID }, Params: { slug: string } }>(
+    "/licenses/:slug", {
+    schema: { ...payloadRequireTokenSchema(LicenseCreationSchema, Type.String()), params: Type.Object({ slug: Type.String() }) }
+  }, (req, res) => {
+    const data = req.body
+    const slug = req.params.slug
+    const user = authenticate(req.headers.token)
+
+    if (user.isErr || !isManager(user.ok)) {
+      res.status(401).send("not authorized")
+      return
+    }
+
+    const result = licenseManager.update(slug, data.name)
+    if (result.isErr) {
+      if (result.err === 'noSuchLicense') {
+        res.status(404).send("no such license")
+      } else {
+        res.status(400).send("this license already exists")
+      }
+      return
+    }
+
+    res.status(200).send("updated")
+  })
+
   app.delete<{ Headers: { token: UUID }, Reply: string, Params: { slug: string } }>(
     "/licenses/:slug", {
     schema: requireTokenSchema(Type.String())

@@ -36,6 +36,28 @@ export default function orderRouter(app: FastifyInstance) {
     res.status(200).send(result.ok)
   })
 
+  app.patch<{ Headers: { token: UUID }, Body: any, Reply: string, Params: { id: number } }>(
+    "/orders/:id", {
+    schema: { ...payloadRequireTokenSchema(Type.Object({}, { additionalProperties: true }), Type.String()), params: idParams }
+  }, (req, res) => {
+    const token = req.headers.token
+    const id = req.params.id
+
+    const requester = authenticate(token)
+    if (requester.isErr || (!isClerk(requester.ok) && !isManager(requester.ok))) {
+      res.status(401).send("not authorized")
+      return
+    }
+
+    const result = orderManager.patch(id, req.body)
+    if (result.isErr) {
+      res.status(400).send(result.err)
+      return
+    }
+
+    res.status(200).send("order updated")
+  })
+
   app.get<{ Headers: { token: UUID }, Reply: string | OrderGetReply, Params: { id: number } }>(
     "/orders/:id", {
     schema: { ...requireTokenSchema(OrderGetSchema), params: idParams }
@@ -212,7 +234,19 @@ export default function orderRouter(app: FastifyInstance) {
     const { driverId, vehicleId } = req.body
     const result = routeManager.loadOrder(operator.ok.username, id, driverId, vehicleId)
     if (result.isErr) {
-      res.status(400).send(result.err)
+      let errorMessage: string = result.err
+      if (result.err === 'vehicleCapacityExceeded') {
+        errorMessage = 'A capacidade de carga (peso) do veículo é inferior ao necessário para este pedido.'
+      } else if (result.err === 'vehicleVolumeExceeded') {
+        errorMessage = 'O volume interno do veículo é inferior ao necessário para este pedido.'
+      } else if (result.err === 'vehicleOrDriverMissingLicense') {
+        errorMessage = 'O veículo ou o motorista não possui todas as licenças exigidas por este pedido.'
+      } else if (result.err === 'vehicleOrDriverOnRoute') {
+        errorMessage = 'O veículo ou o motorista já está em rota.'
+      } else if (result.err === 'driverVehicleMissmatch') {
+        errorMessage = 'O motorista já está associado a outro veículo nesta rota.'
+      }
+      res.status(400).send(errorMessage)
       return
     }
 

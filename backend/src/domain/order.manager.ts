@@ -74,6 +74,15 @@ class OrderManager {
     return Ok('ok')
   }
 
+  public patch(id: number, data: Partial<Order>): Result<'ok', 'noSuchOrder'> {
+    const order = this.orders.get(id)
+    if (!order) return Err('noSuchOrder')
+
+    this.orders.set(id, { ...order, ...data, id })
+    this.saveOrders()
+    return Ok('ok')
+  }
+
   public cancel(managerId: string, orderId: number, reason: string): Result<'cancelled', 'noSuchOrder' | 'noSuchManager' | 'cantBeCancelled'> {
     const manager = userManager.getActive(managerId)
     if (!manager || !isManager(manager)) return Err('noSuchManager')

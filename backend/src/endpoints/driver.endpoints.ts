@@ -1,12 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import Type from "typebox";
-import { type UserGetReply } from "./dtos/user.dto.ts";
 import { authenticate } from "@/services/authentication/auth.ts";
 import type { UUID } from "node:crypto";
 import { requireTokenSchema } from "@/lib/endpoint.utils.ts";
 import { userManager } from "@/domain/user.manager.ts";
 import { isDriver, isOperator } from "@/lib/user.utils.ts";
-import { UserSchema } from "@/models/user.ts";
+import { UserSchema, type User } from "@/models/user.ts";
 import { routeManager } from "@/domain/route.manager.ts";
 import { vehicleManager } from "@/domain/vehicle.manager.ts";
 import { RoutesGetAllSchema, type DriverRoutesGetReply } from "./dtos/route.dto.ts";
@@ -42,7 +41,7 @@ export default function driverRouter(app: FastifyInstance) {
     )
   })
 
-  app.get<{ Headers: { token: UUID }, Reply: string | UserGetReply[] }>(
+  app.get<{ Headers: { token: UUID }, Reply: string | User[] }>(
     "/drivers", {
     schema: requireTokenSchema(Type.Array(UserSchema))
   }, (req, res) => {
