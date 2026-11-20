@@ -1,4 +1,3 @@
-import type { License } from "@/models/license.ts"
 import type { Order, OrderPreview } from "@/models/order.ts"
 
 export type GetOrdersReply = OrderPreview[]
@@ -12,7 +11,17 @@ export type CreateOrderRequest = {
   clientRegistration: string
   weight: number
   volume: number
-  licenses: License[]
+  licenseIds: string[]
+}
+
+export type UpdateOrderRequest = {
+  description: string | undefined
+  destination: string | undefined
+  clientName: string | undefined
+  clientRegistration: string | undefined
+  weight: number | undefined
+  volume: number | undefined
+  licenseIds: string[] | undefined
 }
 
 export type RejectOrderRequest = {
@@ -34,4 +43,8 @@ export type CancelOrderRequest = {
 export type LoadOrderRequest = {
   driverId: string
   vehicleId: string
+}
+
+export type SwapOrderIndex = {
+  swappedId: number
 }

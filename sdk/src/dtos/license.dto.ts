@@ -4,8 +4,7 @@ export type CreateLicenseRequest = {
   name: string
 }
 
-export type EditLicenseRequest = {
-  id: string
+export type UpdateLicenseRequest = {
   name: string
 }
 

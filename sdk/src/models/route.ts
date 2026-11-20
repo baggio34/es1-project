@@ -1,6 +1,6 @@
-import type { UserSignature } from "@/dtos/user.dto.ts"
 import type { OrderPreview } from "./order.ts"
-import type { VehiclePreview } from "./vehicle.ts"
+import type { UserSignature } from "./user.ts"
+import type { VehicleSignature } from "./vehicle.ts"
 
 export type RouteStatusEnum =
   | "WAITING_OPERATOR_AUTHORIZATION"
@@ -32,7 +32,7 @@ export type RouteStatus =
 export type Route = {
   id: string
   driver: UserSignature
-  vehicle: VehiclePreview
+  vehicle: VehicleSignature
   createdBy: UserSignature
   createdAt: string
   updatedAt: string
@@ -41,7 +41,7 @@ export type Route = {
 
 export type RoutePreview = {
   driver: UserSignature
-  vehicle: VehiclePreview
+  vehicle: VehicleSignature
   status: RouteStatusEnum
 }
 

@@ -2,26 +2,27 @@
 // A diferença é que não se assume que os admins e gerentes podem fazer o trabalho
 // do motorista.
 
-import type { User } from "@/models/user.ts"
+import type { User } from "@/generated/prisma/client.ts"
+
 
 export function isAdmin(user: User) {
-  return user.role == 'admin'
+  return user.role == 'ADMIN'
 }
 
 export function isManager(user: User) {
-  return user.role == 'admin' || user.role == 'manager'
+  return user.role == 'ADMIN' || user.role == 'MANAGER'
 }
 
 export function isClerk(user: User) {
-  return user.role == 'clerk' || user.role == 'admin' || user.role == 'manager'
+  return user.role == 'CLERK' || user.role == 'ADMIN' || user.role == 'MANAGER'
 }
 
 export function isOperator(user: User) {
-  return user.role == 'operator' || user.role == 'admin' || user.role == 'manager'
+  return user.role == 'OPERATOR' || user.role == 'ADMIN' || user.role == 'MANAGER'
 }
 
 export function isDriver(user: User) {
-  return user.role == 'driver'
+  return user.role == 'DRIVER'
 }
 
 export function obfuscateCpf(cpf: string): string {

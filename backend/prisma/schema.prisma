@@ -56,8 +56,8 @@ model User {
   role         RoleEnum
 
   // Dados obrigatórios somente a motoristas.
-	transportState TransportStateEnum? 
-  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: Restrict)
+	transportState TransportStateEnum?
+  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: SetNull)
 	routeId        String? @unique
   licenses       DriverToLicense[]
 
@@ -141,7 +141,7 @@ model Route {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-	status RouteStatusEnum
+	status RouteStatusEnum @default(WAITING_OPERATOR_AUTHORIZATION)
 
   // WAITING_DRIVER_DISPATCH
 	dispatchApprovedOn   DateTime?
@@ -174,9 +174,9 @@ model Vehicle {
 	maxLoad        Float
 	isActive       Boolean @default(true)
 
-	transportState TransportStateEnum
+	transportState TransportStateEnum @default(FREE)
 
-  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: Restrict)
+  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: SetNull)
 	routeId        String? @unique
 
   licenses       VehicleToLicense[]
@@ -208,7 +208,7 @@ model VehicleToLicense {
 }
 
 model Order {
-	id                 String   @id @default(cuid())
+	id                 Int    @id @default(autoincrement())
 	description        String
 	destination        String
 
@@ -224,7 +224,7 @@ model Order {
 
   licenses           OrderToLicense[]
 
-	status             OrderStatusEnum
+	status             OrderStatusEnum @default(WAITING_APPROVAL)
  
   // REJECTED
 	rejectedBy      User? @relation("rejectedBy", fields: [rejectedById], references: [id], onDelete: Restrict)
@@ -248,9 +248,9 @@ model Order {
 	loadedBy   User?   @relation("loadedBy", fields: [loadedById], references: [id], onDelete: Restrict)
 	loadedById String?
 	loadedOn   DateTime?
-  route      Route?  @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  route      Route?  @relation(fields: [routeId], references: [id], onDelete: SetNull)
 	routeId    String? @unique
-  routeIndex Int // Ordem do pedido dentro da rota  
+  routeIndex Int? // Ordem do pedido dentro da rota  
 
 
   // ACCIDENT
@@ -279,7 +279,7 @@ model Order {
 	
 model OrderToLicense {
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-	orderId   String
+	orderId   Int
 
 	license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   licenseId String

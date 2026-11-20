@@ -1,5 +1,4 @@
-import type { Vehicle } from "@/models/vehicle.ts"
-import type { UserSignature } from "./user.dto.ts"
+import type { VehicleDetailed, VehiclePreview } from "@/models/vehicle.ts"
 
 export type CreateVehicleRequest = {
   plate: string
@@ -7,16 +6,19 @@ export type CreateVehicleRequest = {
   color: string
   internalVolume: number
   maxLoad: number
+  licenseIds: string[]
 }
 
 export type UpdateVehicleRequest = {
-  plate: string | null
-  model: string | null
-  color: string | null
-  internalVolume: number | null
-  maxLoad: number | null
+  plate: string | undefined
+  model: string | undefined
+  color: string | undefined
+  isActive: boolean | undefined
+  internalVolume: number | undefined
+  maxLoad: number | undefined
+  licenseIds: string[] | undefined
 }
 
-export type GetVehicleReply = Vehicle & {
-  createdBy: UserSignature
-} 
+export type GetVehicleReply = VehicleDetailed
+
+export type GetVehiclesReply = VehiclePreview[]

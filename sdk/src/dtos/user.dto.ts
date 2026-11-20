@@ -1,25 +1,29 @@
-import type { User, Role } from "@/models/user.ts"
+import type { UserDetailed } from "@/models/user.ts"
 
-// Representa uma autoria de ação
-export type UserSignature = {
-  id: string,
-  username: string,
-  name: string,
-} 
+export type GetUserReply = UserDetailed
 
-export type GetUserReply = User
+type CreateUserRole =
+  | { role: 'MANAGER' }
+  | { role: 'CLERK' }
+  | { role: 'ADMIN' }
+  | { role: 'OPERATOR' }
+  | {
+    role: 'DRIVER',
+    licenseIds: string[]
+  }
 
 export type CreateUserRequest = {
   username: string
   name: string
   password: string
   cpf: string
-} & Role
+} & CreateUserRole
 
 export type UpdateUserRequest = {
-  username: string | null
-  name: string | null
-  isActive: boolean | null
-  password: string | null
-  cpf: string | null
+  username: string | undefined
+  name: string | undefined
+  isActive: boolean | undefined
+  password: string | undefined
+  cpf: string | undefined
+  licenseIds: string[] | undefined
 }

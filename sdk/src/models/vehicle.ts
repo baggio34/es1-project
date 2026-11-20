@@ -1,8 +1,8 @@
-import type { UserSignature } from '@/dtos/user.dto.ts'
 import { type TransportState, type TransportStateEnum} from './transport_state.ts'
 import type { License } from './license.ts'
+import type { UserSignature } from './user.ts'
 
-export type Vehicle = {
+export type VehicleDetailed = {
   id: string
   plate: string
   model: string
@@ -21,6 +21,17 @@ export type VehiclePreview = {
   model: string
   plate: string
   status: TransportStateEnum
+  color: string
+  internalVolume: number
+  maxLoad: number
+  isActive: boolean
+}
+
+export type VehicleSignature = {
+  id: string
+  model: string
+  color: string
+  plate: string
 }
 
 

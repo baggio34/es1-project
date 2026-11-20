@@ -1,20 +1,28 @@
-import type { UserSignature } from "@/dtos/user.dto.ts"
 import type { RoutePreview } from "./route.ts"
 import type { License } from "./license.ts"
-import type { VehiclePreview } from "./vehicle.ts"
+import type { VehicleSignature } from "./vehicle.ts"
+import type { UserSignature } from "./user.ts"
+
+export const cancellableOrderStatuses = [
+  'WAITING_APPROVAL',
+  'WAITING_PAYMENT',
+  'IN_PREPARATION',
+  'ON_ROUTE',
+] as const
+
+export const nonCancellableOrderStatuses = [
+  'REJECTED',
+  'LOADED',
+  'WAITING_DISPATCH',
+  'ACCIDENT',
+  'RESOLVED_ACCIDENT',
+  'ARRIVED',
+  'CANCELLED',
+] as const
 
 export type OrderStatusEnum =
-  | 'WAITING_APPROVAL'
-  | 'REJECTED'
-  | 'WAITING_PAYMENT'
-  | 'IN_PREPARATION'
-  | 'LOADED'
-  | 'WAITING_DISPATCH'
-  | 'ON_ROUTE'
-  | 'ACCIDENT'
-  | 'RESOLVED_ACCIDENT'
-  | 'ARRIVED'
-  | 'CANCELLED'
+  | (typeof cancellableOrderStatuses)[number]
+  | (typeof nonCancellableOrderStatuses)[number]
 
 export type OrderStatusPreview =
   | {
@@ -23,7 +31,7 @@ export type OrderStatusPreview =
   | {
       status: 'IN_PREPARATION' | 'LOADED' | 'WAITING_DISPATCH' | 'ON_ROUTE' | 'ACCIDENT' | 'RESOLVED_ACCIDENT' | 'ARRIVED'
       driver: UserSignature,
-      vehicle: VehiclePreview,
+      vehicle: VehicleSignature,
       routeIndex: number,
     }
 
@@ -96,7 +104,7 @@ type NonCancellableOrderStatus =
 export type OrderStatus = CancellableOrderStatus | NonCancellableOrderStatus
 
 export type Order = {
-  id: string
+  id: number
   description: string
   destination: string
   clientName: string
@@ -110,7 +118,7 @@ export type Order = {
 } & OrderStatus
 
 export type OrderPreview = {
-  id: string
+  id: number
   destination: string
   clientName: string
   clientRegistration: string

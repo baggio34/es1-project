@@ -1,4 +1,3 @@
-import type { UserSignature } from "@/dtos/user.dto.ts"
 import type { License } from "./license.ts"
 import type { TransportState } from "./transport_state.ts"
 
@@ -20,7 +19,7 @@ export type Role =
     licenses: License[]
   }
 
-export type User = {
+export type UserDetailed = {
   id: string
   username: string
   name: string
@@ -31,3 +30,20 @@ export type User = {
   createdAt: string
   updatedAt: string
 }
+
+export type UserPreview = {
+  id: string
+  username: string
+  name: string
+  cpf: string
+  isActive: boolean
+  role: RoleEnum
+}
+
+// Representa uma autoria de ação
+export type UserSignature = {
+  id: string,
+  username: string,
+  name: string,
+} 
+

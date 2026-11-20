@@ -1,162 +1,161 @@
-import type { LoginPayload, LoginReply } from "@/endpoints/dtos/auth.dto.ts";
-import type { Role, UserPatchPayload, UserRegistrationPayload } from "@/endpoints/dtos/user.dto.ts";
+import type { CreateUserRequest, UpdateUserRequest } from "@/dtos/user.dto.ts"
+import type { LoginReply, LoginRequest} from "@/dtos/auth.dto.ts"
+import type { PrismaClient, User } from "@/generated/prisma/client.ts";
 import { Err, Ok, type Result } from "@/lib/result.ts";
 import { isAdmin, isDriver, isManager } from "@/lib/user.utils.ts";
-import type { TransportationStatus } from "@/models/driver.ts";
-import type { User } from "@/models/user.ts";
-import { accessTokenManager } from "@/services/authentication/access_token.manager.ts";
-import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_operations.ts";
+import { PrismaContext } from "@/services/database/prisma_context.ts";
+import assert from "assert";
 import { hash } from "crypto";
 
 /**
  * Gerencia os usuários do sistema, contém ações que afetam qualquer cargo de usuário.
  */
-class UserManager {
-  private users = new Map<string, User>()
-
-  UserManager() {
-    const result = loadObjectFromFile<Record<string, User>>('./data/users.json')
-    if (result.isOk) {
-      this.users = new Map(Object.entries(result.ok))
-    } else {
-      console.error(`Error loading users: '${result.err}'\nStarting with new data.`)
-      this.registerRoot("admin123")
-    }
+export class UserManager {
+  private static instance: UserManager | null
+  private prisma: PrismaClient
+  
+  private constructor() {
+    this.prisma = PrismaContext.getClient()
   }
 
-  saveUsers(): Result<'saved', string> {
-    const result = saveObjectToFile('./data/users.json', Object.fromEntries(this.users.entries()))
-    if (result.isErr) {
-      console.error(result.err)
-      return result
+  public static getInstance(): UserManager {
+    if (!this.instance) {
+      this.instance = new UserManager()
     }
-    return Ok('saved')
+    return this.instance
   }
 
-  /**
-   * Retorna um usuário dado seu `username`.
-   */
-  public get(username: string): User | undefined {
-    return this.users.get(username)
+  public async get(username: string): Promise<User | null> {
+    return await this.prisma.user.findFirst({
+      where: { username }
+    })
   }
 
   /**
    * Retorna um usuário dado seu `username` somente se ele estiver ativo.
    */
-  public getActive(username: string): User | undefined {
-    const user = this.users.get(username)
-    if (user?.condition == 'active') return user
-    return undefined
+  public async getActive(username: string): Promise<User | null> {
+    return await this.prisma.user.findFirst({
+      where: { username, isActive: true }
+    })
   }
 
   /**
-   * Retorna todos os usuários. Pode também fornecer um query de cargo, ao filtrar
-   * motoristas também é possível indicar as licenças que ele deve possuir.
+   * Retorna todos os usuários.
    */
-  public getAll(roleQuery?: Role): User[] {
-    if (!roleQuery) return [...this.users.values()]
-    return this.users.values()
-      .filter(user => {
-        if (roleQuery.role != 'driver') return user.role == roleQuery.role
-        return user.role == 'driver' && roleQuery.licenses.every(user.licenses.includes)
+  public async getAll(): Promise<User[]> {
+    return await this.prisma.user.findMany()
+  }
+
+  /**
+   * Retorna todos os motoristas ativos.
+   */
+  public async getDrivers(): Promise<User[]> {
+    return await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: "DRIVER",
+      }
+    })
+  }
+
+  /**
+   * Cria uma nova conta a pedido de [requester].
+   * @param O gerente ou admin.
+   */
+  public async create(creator: User, data: CreateUserRequest): Promise<Result<'', 'usernameTaken'>> {
+    assert(creator.isActive && isManager(creator))
+    assert(isAdmin(creator) || (data.role != "ADMIN" && data.role != "MANAGER"))
+
+    try {
+      await this.prisma.user.create({
+        data: {
+          ...data,
+          licenses: data.role == "DRIVER"
+            ? {
+                createMany: {
+                  data: data.licenseIds.map(l => ({ licenseId: l }))
+                }
+              }
+            : undefined,
+          createdById: creator.id,
+          passwordHash: hash('sha256', data.password),
+        }
       })
-      .toArray()
-  }
-
-  /**
-   * Cria uma nova conta a pedido de [requesterId].
-   * @param requesterId nome de usuário do gerente ou admin.
-   */
-  public register(requesterId: string, data: UserRegistrationPayload): Result<'created', 'usernameTaken' | 'notAuthorized'> {
-    const requester = this.get(requesterId)
-    if (!requester || !isManager(requester)) return Err('notAuthorized')
-
-    // Apenas admins podem cadastrar gerentes e outros admins.
-    if ((data.role == 'manager' || data.role == 'admin') && !isAdmin(requester)) {
-      return Err('notAuthorized')
+    } catch (e) {
+      return Err('usernameTaken')
     }
-    if (this.users.has(data.username)) return Err('usernameTaken')
-    
-    const user = {
-      ...data,
-      condition: 'active' as const,
-      registeredOn: new Date().toISOString(),
-      registeredBy: requesterId,
-      passwordHash: hash('sha256', data.password),
-      // Marca o estado inicial como 'free' se for motorista.
-      status: 'free' as const
-    }
-
-    this.users.set(data.username, user as User)
-
-    this.saveUsers()
-    return Ok('created')
+    return Ok('')
   }
 
   /**
    * Realiza o login e retorna o novo token de acesso para o usuário caso bem sucedido.
    * Apenas admins podem criar gerentes ou outros admins.
    */
-  public login({ username, password }: LoginPayload): Result<LoginReply, 'invalidCredentials'> {
-    const user = this.get(username)
-    if (!user || user.condition != 'active' || user.passwordHash != hash('sha256', password)) return Err('invalidCredentials')
+  public async login({ username, password }: LoginRequest): Promise<Result<LoginReply, 'invalidCredentials'>> {
+    const user = await this.prisma.user.findFirst({
+      where: { username, isActive: true }
+    })
+
+    if (!user || user.passwordHash != hash('sha256', password)) return Err('invalidCredentials')
+
+    const accessToken = crypto.randomUUID()
+    await this.prisma.user.update({
+      where: { username },
+      data: { accessToken },
+    })
 
     return Ok({
-      token: accessTokenManager.logUserIn(username),
+      token: accessToken,
       ...user
     })
   }
 
   /**
-   * Altera os dados de um usuário por pedido de `requesterId`.
+   * Altera os dados de um usuário por pedido de `requester`.
    * Apenas admins podem modificar gerentes ou outros admins.
-   * @param requesterId nome de usuário do gerente ou admin.
+   * @param requester gerente ou admin.
    */
-  public patch(requesterId: string, username: string, data: UserPatchPayload): Result<'edited', 'noSuchUser' | 'notAuthorized'> {
-    const requester = this.get(requesterId)
-    if (!requester || !isManager(requester)) return Err('notAuthorized')
+  public async update(requester: User, username: string, data: UpdateUserRequest): Promise<Result<'', 'noSuchUser' | 'notAuthorized' | 'badRequest' | 'usernameTaken'>> {
+    assert(isManager(requester))
 
-    const user = this.get(username)
+    const user = await this.prisma.user.findFirst({ where: { username } })
     if (!user) return Err('noSuchUser')
     if (isManager(user) && !isAdmin(requester)) return Err('notAuthorized')
 
-    if (data.password) user.passwordHash = hash('sha256', data.password)
-    if (data.name) user.name = data.name
-    if (data.condition) user.condition = data.condition
+    // Checar se o novo nome de usuário está live
+    if (data.username && await this.prisma.user.findFirst({ where: { username: data.username }})) {
+      return Err('usernameTaken')
+    }
 
-    this.saveUsers()
-    return Ok('edited')
-  }
+    const passwordHash = data.password ? hash('sha256', data.password) : undefined
+    try {
+      await this.prisma.user.update({
+        where: { username },
+        data: {
+          ...data,
+          passwordHash,
+          licenses: isDriver(user) && data.licenseIds
+            ? {
+                createMany: {
+                  skipDuplicates: true,
+                  data: data.licenseIds.map(l => ({ licenseId: l }))
+                }
+              }
+            : undefined
+        }
+      })
 
-  /**
-   * Permite atualizar o status de um motorista.
-   * Não deve ser acessível para fora do programa.
-   */
-  public updateDriverStatus(username: string, data: TransportationStatus): Result<'ok', 'noSuchDriver'> {
-    const driver = this.users.get(username)
-    if (!driver || !isDriver(driver)) return Err('noSuchDriver')
+      // Remover licensas antigas
+      if (isDriver(user) && data.licenseIds) {
+        await this.prisma.driverToLicense.deleteMany({
+          where: { driverId: user.id, licenseId: { notIn: data.licenseIds } }
+        })
+      }
+    } catch (e) {
+      return Err('badRequest')
+    }
 
-    this.users.set(username, { ...driver, ...data })
-    this.saveUsers()
-    return Ok('ok')
-  }
-
-  /**
-   * Registra o administrador padrão, com a senha fornecida.
-   */
-  registerRoot(password: string): void {
-    this.users.set("root", {
-      name: "Administrador",
-      username: 'root',
-      role: 'admin',
-      cpf: "000.000.000-00",
-      condition: 'active',
-      registeredOn: new Date().toISOString(),
-      registeredBy: "root",
-      passwordHash: hash('sha256', password),
-    })
-    this.saveUsers()
+    return Ok('')
   }
 }
-
-export const userManager = new UserManager()

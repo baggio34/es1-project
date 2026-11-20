@@ -1,241 +1,276 @@
 import { Err, Ok, type Result } from "@/lib/result.ts"
-import type { Order, OrderCreationPayload, CancellableOrderStatus } from "@/models/order.ts"
-import { userManager } from "./user.manager.ts"
+import type { CancelOrderRequest, SwapOrderIndex, CreateOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest } from "@/dtos/order.dto.ts"
 import { isClerk, isDriver, isManager, isOperator } from "@/lib/user.utils.ts"
-import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_operations.ts"
-import { routeManager } from "./route.manager.ts"
-import { deliveriesLeft } from "@/lib/transport.utils.ts"
 import assert from "assert"
+import type { Order, PrismaClient, User } from "@/generated/prisma/client.ts"
+import { PrismaContext } from "@/services/database/prisma_context.ts"
+import { nonCancellableOrderStatuses } from "@/models/order.ts"
 
-class OrderManager {
-  orders = new Map<number, Order>
-  idCounter = 1 
+/**
+ * Gerencia os pedidos do sistema.
+ */
+export class OrderManager {
+  private static instance: OrderManager | null
+  private prisma: PrismaClient
+  
+  private constructor() {
+    this.prisma = PrismaContext.getClient()
+  }
 
-  OrderManager() {
-    const result = loadObjectFromFile<Record<number, Order>>('./data/orders.json')
-    if (result.isOk) {
-      this.orders = new Map<number, Order>(
-        Object.entries(result.ok).map(([key, value]) => [Number(key), value])
-      )
-      // Atualiza o contador para o próximo id.
-      for (const order of this.orders) {
-        if (order[1].id > this.idCounter) {
-          this.idCounter = order[1].id + 1
-        }
+  public static getInstance(): OrderManager {
+    if (!this.instance) {
+      this.instance = new OrderManager()
+    }
+    return this.instance
+  }
+
+  /**
+   * Retorna um pedido dado seu id.
+   */
+  public async get(id: number): Promise<Order | null> {
+    return await this.prisma.order.findFirst({ where: { id } })
+  }
+
+  /**
+   * Retorna todos os pedidos.
+   */
+  public async getAll(): Promise<Order[]> {
+    return await this.prisma.order.findMany()
+  }
+
+  /**
+   * Cria um novo pedido por parte do atendente `clerk`.
+   * Retorna o id do pedido.
+   */
+  public async create(clerk: User, data: CreateOrderRequest): Promise<Result<number, void>> {
+    assert(clerk.isActive && isClerk(clerk))
+
+    const order = await this.prisma.order.create({
+      data: {
+        ...data,
+        licenses: {
+          createMany: {
+            data: data.licenseIds.map(l => ({ licenseId: l }))
+          }
+        },
+        createdById: clerk.id,
       }
-    } else {
-      console.error(`Error loading orders: '${result.err}'\nStarting with new data.`)
-    }
-  }
+    })
 
-  saveOrders(): Result<'saved', string> {
-    const result = saveObjectToFile('./data/orders.json', Object.fromEntries(this.orders.entries()))
-    if (result.isErr) {
-      console.error(result.err)
-      return result
-    }
-    return Ok('saved')
-  }
-
-  public get(id: number): Order | undefined {
-    return this.orders.get(id)
-  }
-
-  public getAll(status?: string): Order[] {
-    if (!status) return [...this.orders.values()]
-    return this.orders.values()
-      .filter(o => o.status == status)
-      .toArray()
-  }
-
-  public create(clerkId: string, data: OrderCreationPayload): Result<number, 'noSuchClerk'> {
-    const clerk = userManager.getActive(clerkId)
-    if (!clerk || !isClerk(clerk)) return Err('noSuchClerk')
-
-    const order: Order = {
-      id: this.idCounter,
-      createdOn: new Date().toISOString(),
-      createdBy: clerkId,
-      status: 'pendingApproval',
-      ...data,
-    }
-    this.idCounter += 1
-
-    this.orders.set(order.id, order)
-    this.saveOrders()
     return Ok(order.id)
   }
 
-  public updateStatus(id: number, data: CancellableOrderStatus): Result<'ok', 'noSuchOrder'>{
-    const order = this.orders.get(id)
-    if (!order) return Err('noSuchOrder')
+  /**
+   * Cancela um pedido.
+   */
+  public async cancel(manager: User, order: Order, { reason }: CancelOrderRequest): Promise<Result<'', 'cantBeCancelled'>> {
+    assert(manager.isActive && isManager(manager))
 
-    this.orders.set(id, {...order, ...data})
-    this.saveOrders()
-    return Ok('ok')
+    if (nonCancellableOrderStatuses.find(s => s == order.status)) {
+      return Err("cantBeCancelled")
+    }
+
+    if (order.status == "ON_ROUTE") await this.completeRoute(order)
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "CANCELLED",
+        cancellationReason: reason,
+        cancelledById: manager.id,
+        cancelledOn: new Date()
+      }
+    })
+
+    return Ok('')
   }
 
-  public cancel(managerId: string, orderId: number, reason: string): Result<'cancelled', 'noSuchOrder' | 'noSuchManager' | 'cantBeCancelled'> {
-    const manager = userManager.getActive(managerId)
-    if (!manager || !isManager(manager)) return Err('noSuchManager')
+  /**
+   * Reprova um pedido aguardando aprovação.
+   */
+  public async reject(operator: User, order: Order, { reason }: RejectOrderRequest): Promise<Result<'', 'notWaitingApproval'>> {
+    assert(operator.isActive && isOperator(operator))
+    if (order.status != 'WAITING_APPROVAL') return Err('notWaitingApproval')
 
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (order.status == 'arrived' || order.status == 'cancelled') return Err('cantBeCancelled')
+    
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "REJECTED",
+        rejectionReason: reason,
+        rejectedById: operator.id,
+        rejectedOn: new Date(),
+      }
+    })
 
-    this.orders.set(orderId, {
-      ...order,
-      status: 'cancelled',
-      previousStatus: {
-        ...order
+    return Ok('')
+  }
+
+
+  /**
+   * Aprova um pedido aguardando aprovação.
+   */
+  public async approve(operator: User, order: Order): Promise<Result<'', 'notWaitingApproval'>> {
+    assert(operator.isActive && isOperator(operator))
+    if (order.status != 'WAITING_APPROVAL') return Err('notWaitingApproval')
+    
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "WAITING_PAYMENT",
+        approvedById: operator.id,
+        approvedOn: new Date(),
+      }
+    })
+
+    return Ok('')
+  }
+
+  /**
+   * Confirma o pagamento de um pedido.
+   */
+  public async confirmPayment(clerk: User, order: Order): Promise<Result<'', 'notWaitingPaymentConfirmation'>> {
+    assert(clerk.isActive && isClerk(clerk))
+    if (order.status != 'WAITING_PAYMENT') return Err('notWaitingPaymentConfirmation')
+    
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "IN_PREPARATION",
+        paymentConfirmedById: clerk.id,
+        paymentConfirmedOn: new Date(),
+      }
+    })
+
+    return Ok('')
+  }
+
+  private async deliveriesLeft(order: Order): Promise<number> {
+    return this.prisma.order.count({
+      where: {
+        routeId: order.routeId,
+        status: "ON_ROUTE",
+      }
+    })
+  }
+
+  public async completeRoute(order: Order) {
+    assert(order.status == "ON_ROUTE")
+
+    if (await this.deliveriesLeft(order) == 1) {
+      const route = await this.prisma.route.update({
+        where: { id: order.routeId! },
+        data: {
+          status: "COMPLETED",
+          routeCompletedOn: new Date(),
+        }
+      })
+
+      await this.prisma.vehicle.update({
+        where: { id: route.vehicleId },
+        data: { transportState: "FREE" }
+      })
+
+      await this.prisma.user.update({
+        where: { id: route.driverId },
+        data: { transportState: "FREE" }
+      })
+    }
+  }
+
+  /**
+   * Reporta um acidente que ocorreu com um pedido.
+   */
+  public async reportAccident(driver: User, order: Order, { accident }: ReportOrderAccidentRequest): Promise<Result<"", "notAuthorized" | "noSuchOrder" | "noSuchDriver" | "orderNotOnRoute">> {
+    assert(driver.isActive && isDriver(driver))
+
+    if (order.status != 'ON_ROUTE') return Err('orderNotOnRoute')
+    if (driver.routeId != order.routeId) return Err('notAuthorized')
+
+    await this.completeRoute(order)
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "ACCIDENT",
+        accidentOn: new Date(),
+        accidentDescription: accident,
+      }
+    })
+
+    return Ok('')
+  }
+
+  /**
+   * Resolve um acidente envolvendo um pedido.
+   */
+  public async resolveAccident(manager: User, order: Order, { description }: ResolveOrderAccidentRequest): Promise<Result<"", "noAccidentOccurred">> {
+    assert(manager.isActive && isManager(manager))
+    if (order.status != 'ACCIDENT') return Err('noAccidentOccurred')
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "RESOLVED_ACCIDENT",
+        accidentResolvedOn: new Date(),
+        accidentResolvedById: manager.id,
+        accidentResolutionDescription: description,
+      }
+    })
+
+    return Ok('')
+  }
+
+  /**
+   * Marca um pedido como entregue
+   */
+  public async confirmArrival(driver: User, order: Order): Promise<Result<"", "notAuthorized" | "orderNotOnRoute">> {
+    assert(driver.isActive && isDriver(driver))
+
+    if (order.status != 'ON_ROUTE') return Err('orderNotOnRoute')
+    if (driver.routeId != order.routeId) return Err('notAuthorized')
+
+    await this.completeRoute(order)
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "ARRIVED",
+        arrivedOn: new Date(),
+      }
+    })
+
+    return Ok('')
+  }
+
+  /*
+   * Troca a ordem de entrega de dois pedidos.
+   */
+  public async swapIndexes(order: Order, data: SwapOrderIndex): Promise<Result<'', 'cantBeEdited' | 'cantSwapWithThatOrder'>> {
+    if (order.status != "LOADED") return Err('cantBeEdited')
+
+    const other = await this.prisma.order.findFirst({
+      where: {
+        routeId: order.routeId!,
+        id: data.swappedId,
+      }
+    })
+    if (!other) return Err("cantSwapWithThatOrder")
+
+    await this.prisma.order.update({
+      where: {
+        id: order.id
       },
-      cancellationReason: reason,
-      cancelledBy: managerId,
-      cancelledOn: new Date().toISOString()
+      data: { routeIndex: other.routeIndex! }
     })
 
-    this.saveOrders()
-    return Ok('cancelled')
-  }
-
-  public reject(operatorId: string, orderId: number, reason: string): Result<'rejected', 'noSuchOrder' | 'noSuchOperator' | 'cantBeRejected'> {
-    const operator = userManager.getActive(operatorId)
-    if (!operator || !isOperator(operator)) return Err('noSuchOperator')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (order.status != 'pendingApproval') return Err('cantBeRejected')
-
-    this.orders.set(orderId, {
-      ...order,
-      status: 'rejected',
-      reason,
-      rejectedBy: operatorId,
-      rejectedOn: new Date().toISOString()
+    await this.prisma.order.update({
+      where: {
+        id: other.id
+      },
+      data: { routeIndex: order.routeIndex! }
     })
 
-    this.saveOrders()
-    return Ok('rejected')
-  }
-
-  public approve(operatorId: string, orderId: number): Result<'approved', 'noSuchOrder' | 'noSuchOperator' | 'cantBeApproved'> {
-    const operator = userManager.getActive(operatorId)
-    if (!operator || !isOperator(operator)) return Err('noSuchOperator')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (order.status != 'pendingApproval') return Err('cantBeApproved')
-
-    this.orders.set(orderId, {
-      ...order,
-      status: 'waitingPayment',
-      approvedBy: operatorId,
-      approvedOn: new Date().toISOString()
-    })
-
-    this.saveOrders()
-    return Ok('approved')
-  }
-
-  public confirmPayment(clerkId: string, orderId: number): Result<'confirmed', 'noSuchOrder' | 'noSuchClerk' | 'cantBeConfirmed'> {
-    const clerk = userManager.getActive(clerkId)
-    if (!clerk || !isClerk(clerk)) return Err('noSuchClerk')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (order.status != 'pendingApproval') return Err('cantBeConfirmed')
-
-    this.orders.set(orderId, {
-      ...order,
-      status: 'waitingPayment',
-      approvedBy: clerkId,
-      approvedOn: new Date().toISOString()
-    })
-
-    this.saveOrders()
-    return Ok('confirmed')
-  }
-
-  public reportAccident(driverId: string, orderId: number, description: string): Result<'reported', 'notAuthorized' | 'noSuchOrder' | 'noSuchDriver' | 'orderNotOnRoute'> {
-    const driver = userManager.getActive(driverId)
-    if (!driver || !isDriver(driver)) return Err('noSuchDriver')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (driver.status != 'onRoute' || order.status != 'onRoute') return Err('orderNotOnRoute')
-    if (driver.routeId != order.routeId) return Err('notAuthorized')
-
-    const route = routeManager.get(order.routeId)!
-    assert(route.status == 'onCourse')
-    
-    if (deliveriesLeft(route) == 1) {
-      routeManager.updateStatus(route.id, {
-        ...route,
-        status: 'completed',
-        completedOn: new Date().toISOString(),
-      })
-    }
-
-    this.updateStatus(orderId, {
-      ...order,
-      status: 'accident',
-      accidentOn: new Date().toISOString(),
-      accidentDescription: description,
-    })
-
-    this.saveOrders()
-    return Ok('reported')
-  }
-
-  public resolveAccident(managerId: string, orderId: number, description: string): Result<'resolved', 'noSuchOrder' | 'noSuchManager' | 'noAccidentOccurred'> {
-    const manager = userManager.getActive(managerId)
-    if (!manager || !isManager(manager)) return Err('noSuchManager')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (order.status != 'accident') return Err('noAccidentOccurred')
-
-    this.orders.set(orderId, {
-      ...order,
-      status: 'resolvedAccident',
-      resolvedOn: new Date().toISOString(),
-      resolutionDescription: description,
-      resolvedBy: managerId
-    })
-
-    this.saveOrders()
-    return Ok('resolved')
-  }
-
-  public confirmArrival(driverId: string, orderId: number): Result<'confirmed', 'notAuthorized' | 'noSuchOrder' | 'noSuchDriver' | 'orderNotOnRoute'> {
-    const driver = userManager.getActive(driverId)
-    if (!driver || !isDriver(driver)) return Err('noSuchDriver')
-
-    const order = orderManager.get(orderId)
-    if (!order) return Err('noSuchOrder')
-    if (driver.status != 'onRoute' || order.status != 'onRoute') return Err('orderNotOnRoute')
-    if (driver.routeId != order.routeId) return Err('notAuthorized')
-
-    const route = routeManager.get(order.routeId)!
-    assert(route.status == 'onCourse')
-    
-    if (deliveriesLeft(route) == 1) {
-      routeManager.updateStatus(route.id, {
-        ...route,
-        status: 'completed',
-        completedOn: new Date().toISOString(),
-      })
-    }
-
-    this.updateStatus(orderId, {
-      ...order,
-      status: 'arrived',
-      arrivedOn: new Date().toISOString(),
-    })
-
-    this.saveOrders()
-    return Ok('confirmed')
+    return Ok('')
   }
 }
-
-export const orderManager = new OrderManager()

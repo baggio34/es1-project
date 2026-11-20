@@ -69,7 +69,7 @@ CREATE TABLE "Routes" (
     "createdById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "status" "RouteStatusEnum" NOT NULL,
+    "status" "RouteStatusEnum" NOT NULL DEFAULT 'WAITING_OPERATOR_AUTHORIZATION',
     "dispatchApprovedOn" TIMESTAMP(3),
     "dispatchApprovedById" TEXT,
     "routeStartedOn" TIMESTAMP(3),
@@ -87,7 +87,7 @@ CREATE TABLE "Vehicles" (
     "internalVolume" DOUBLE PRECISION NOT NULL,
     "maxLoad" DOUBLE PRECISION NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "transportState" "TransportStateEnum" NOT NULL,
+    "transportState" "TransportStateEnum" NOT NULL DEFAULT 'FREE',
     "routeId" TEXT,
     "createdById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -107,7 +107,7 @@ CREATE TABLE "VehiclesToLicenses" (
 
 -- CreateTable
 CREATE TABLE "Orders" (
-    "id" TEXT NOT NULL,
+    "id" INT GENERATED ALWAYS AS IDENTITY,
     "description" TEXT NOT NULL,
     "destination" TEXT NOT NULL,
     "clientName" TEXT NOT NULL,
@@ -117,7 +117,7 @@ CREATE TABLE "Orders" (
     "createdById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "status" "OrderStatusEnum" NOT NULL,
+    "status" "OrderStatusEnum" NOT NULL DEFAULT 'WAITING_APPROVAL',
     "rejectedById" TEXT,
     "rejectedOn" TIMESTAMP(3),
     "rejectionReason" TEXT,
@@ -146,7 +146,7 @@ CREATE TABLE "Orders" (
 
 -- CreateTable
 CREATE TABLE "OrdersToLicenses" (
-    "orderId" TEXT NOT NULL,
+    "orderId" INT NOT NULL,
     "licenseId" TEXT NOT NULL,
 
     CONSTRAINT "OrdersToLicenses_pkey" PRIMARY KEY ("orderId","licenseId")
@@ -207,7 +207,7 @@ CREATE INDEX "Orders_status_idx" ON "Orders"("status");
 CREATE INDEX "OrdersToLicenses_licenseId_idx" ON "OrdersToLicenses"("licenseId");
 
 -- AddForeignKey
-ALTER TABLE "Users" ADD CONSTRAINT "Users_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Users" ADD CONSTRAINT "Users_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Users" ADD CONSTRAINT "Users_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -234,7 +234,7 @@ ALTER TABLE "Routes" ADD CONSTRAINT "Routes_createdById_fkey" FOREIGN KEY ("crea
 ALTER TABLE "Routes" ADD CONSTRAINT "Routes_dispatchApprovedById_fkey" FOREIGN KEY ("dispatchApprovedById") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Vehicles" ADD CONSTRAINT "Vehicles_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Vehicles" ADD CONSTRAINT "Vehicles_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Vehicles" ADD CONSTRAINT "Vehicles_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -261,7 +261,7 @@ ALTER TABLE "Orders" ADD CONSTRAINT "Orders_paymentConfirmedById_fkey" FOREIGN K
 ALTER TABLE "Orders" ADD CONSTRAINT "Orders_loadedById_fkey" FOREIGN KEY ("loadedById") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Orders" ADD CONSTRAINT "Orders_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Orders" ADD CONSTRAINT "Orders_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "Routes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Orders" ADD CONSTRAINT "Orders_accidentResolvedById_fkey" FOREIGN KEY ("accidentResolvedById") REFERENCES "Users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

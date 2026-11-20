@@ -40,7 +40,8 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [
-        "./src/*"
+        "./src/*",
+        "../sdk/src/*"
       ]
     }
   }
