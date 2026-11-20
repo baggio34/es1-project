@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -------------- Tipos Enumerados --------------
+enum TransportStateEnum {
+  FREE
+  WAITING_OPERATOR_AUTHORIZATION
+  WAITING_DRIVER_DISPATCH
+  ON_ROUTE
+}
+
+enum RouteStatusEnum {
+  WAITING_OPERATOR_AUTHORIZATION
+  WAITING_DRIVER_DISPATCH
+  ON_COURSE
+  COMPLETED
+}
+
+enum OrderStatusEnum {
+  WAITING_APPROVAL
+  REJECTED
+  WAITING_PAYMENT
+  IN_PREPARATION
+  LOADED
+  WAITING_DISPATCH
+  ON_ROUTE
+  ACCIDENT
+  RESOLVED_ACCIDENT
+  ARRIVED
+  CANCELLED  
+}
+
+enum RoleEnum {
+  CLERK
+  OPERATOR
+  DRIVER
+  MANAGER
+  ADMIN
+}
+
+// -------------- Tabelas --------------
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+	name         String 
+	cpf          String   @unique
+	passwordHash String
+	isActive     Boolean  @default(true)
+  accessToken  String?  @default(cuid())
+  role         RoleEnum
+
+  // Dados obrigatórios somente a motoristas.
+	transportState TransportStateEnum? 
+  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: Restrict)
+	routeId        String? @unique
+  licenses       DriverToLicense[]
+
+  // Como se trata de uma relação recursiva obrigatória, o super admin deve ser
+  // criado na migration antes que o campo seja tornado obrigatório.
+  createdBy          User @relation("createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ações do gerente
+  createdVehicles Vehicle[] @relation("createdBy")
+  createdUsers    User[]    @relation("createdBy")
+  createdLicenses License[] @relation("createdBy")
+  cancelledOrders Order[]   @relation("cancelledBy")
+  accidentResolvedOrders Order[]   @relation("accidentResolvedBy")
+
+  // Ações do operador
+  loadedOrders   Order[] @relation("loadedBy")
+  approvedOrders Order[] @relation("approvedBy")
+  rejectedOrders Order[] @relation("rejectedBy")
+  dispatchApprovedRoutes Route[] @relation("dispatchApprovedBy")
+  createdRoutes Route[] @relation("createdBy")
+   
+  // Ações do motorista
+  routes Route[] @relation("driver")
+   
+  // Ações do atendente
+  createdOrders Order[] @relation("createdBy")
+  paymentsConfirmed Order[] @relation("paymentConfirmedBy")
+
+  @@index([isActive])
+  @@index([accessToken])
+  @@index([role])
+  @@index([transportState])
+  @@map("Users")
+}
+
+model DriverToLicense {
+  driver    User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+	driverId  String
+
+	license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  licenseId String
+
+  @@id([driverId, licenseId])
+  @@index([licenseId])
+  @@map("DriversToLicenses")
+}
+
+model License {
+	id   String @id @default(cuid())
+	name String
+
+  createdBy   User @relation("createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  drivers  DriverToLicense[]
+  orders   OrderToLicense[]
+  vehicles VehicleToLicense[]
+  
+  @@map("Licenses")
+}
+
+model Route {
+	id       String   @id @default(cuid())
+
+  driver   User     @relation("driver", fields: [driverId], references: [id], onDelete: Restrict)
+	driverId String
+
+  vehicle   Vehicle @relation("vehicle", fields: [vehicleId], references: [id], onDelete: Restrict)
+	vehicleId String
+
+  createdBy   User  @relation("createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+	status RouteStatusEnum
+
+  // WAITING_DRIVER_DISPATCH
+	dispatchApprovedOn   DateTime?
+	dispatchApprovedBy   User? @relation("dispatchApprovedBy", fields: [dispatchApprovedById], references: [id], onDelete: Restrict)
+  dispatchApprovedById String?
+
+  // ON_COURSE
+	routeStartedOn   DateTime?
+
+  // COMPLETED
+	routeCompletedOn DateTime?
+
+  // Ligação direta com o motorista e veículo que estão executando a rota no momento.
+  activeDriver  User?    @relation("activeRoute")
+  activeVehicle Vehicle? @relation("activeRoute")
+
+  orders Order[]
+
+  @@index([driverId])
+  @@index([vehicleId])
+  @@map("Routes")
+}
+
+model Vehicle {
+  id             String  @id @default(cuid())
+	plate          String  @unique
+	model          String
+	color          String
+	internalVolume Float
+	maxLoad        Float
+	isActive       Boolean @default(true)
+
+	transportState TransportStateEnum
+
+  route          Route?  @relation("activeRoute", fields: [routeId], references: [id], onDelete: Restrict)
+	routeId        String? @unique
+
+  licenses       VehicleToLicense[]
+
+  createdBy      User    @relation("createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById    String
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  routes         Route[]  @relation("vehicle")
+
+  @@index([isActive])
+  @@index([transportState])
+  @@map("Vehicles")
+}
+	
+model VehicleToLicense {
+  vehicle    Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+	vehicleId  String
+
+	license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  licenseId String
+
+  @@id([vehicleId, licenseId])
+  @@index([licenseId])
+
+  @@map("VehiclesToLicenses")
+}
+
+model Order {
+	id                 String   @id @default(cuid())
+	description        String
+	destination        String
+
+	clientName         String
+	clientRegistration String
+	weight             Float
+	volume             Float
+
+  createdBy          User     @relation("createdBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  licenses           OrderToLicense[]
+
+	status             OrderStatusEnum
+ 
+  // REJECTED
+	rejectedBy      User? @relation("rejectedBy", fields: [rejectedById], references: [id], onDelete: Restrict)
+	rejectedById    String?
+	rejectedOn      DateTime?
+	rejectionReason String?
+
+  // WAITING_PAYMENT
+	approvedBy   User? @relation("approvedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+	approvedById String?
+	approvedOn   DateTime?
+
+  // IN_PREPARATION
+	paymentConfirmedBy   User? @relation("paymentConfirmedBy", fields: [paymentConfirmedById], references: [id], onDelete: Restrict)
+	paymentConfirmedById String?
+	paymentConfirmedOn   DateTime?
+
+  // LOADED
+  // WAITING_DISPATCH -- Mais dados na rota
+  // ON_ROUTE -- Mais dados na rota
+	loadedBy   User?   @relation("loadedBy", fields: [loadedById], references: [id], onDelete: Restrict)
+	loadedById String?
+	loadedOn   DateTime?
+  route      Route?  @relation(fields: [routeId], references: [id], onDelete: Restrict)
+	routeId    String? @unique
+  routeIndex Int // Ordem do pedido dentro da rota  
+
+
+  // ACCIDENT
+	accidentOn          DateTime?
+	accidentDescription String?
+	
+  // RESOLVED_ACCIDENT
+	accidentResolvedBy            User? @relation("accidentResolvedBy", fields: [accidentResolvedById], references: [id], onDelete: Restrict)
+	accidentResolvedById          String?
+	accidentResolvedOn            DateTime?
+	accidentResolutionDescription String?
+
+  // ARRIVED
+	arrivedOn DateTime?
+
+  // CANCELLED  
+	cancelledBy              User? @relation("cancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+	cancelledById            String?
+	cancelledOn              DateTime?
+	cancellationReason       String?
+	statusBeforeCancellation OrderStatusEnum?
+
+  @@index([status])
+  @@map("Orders")
+}
+	
+model OrderToLicense {
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+	orderId   String
+
+	license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  licenseId String
+
+  @@id([orderId, licenseId])
+  @@index([licenseId])
+
+  @@map("OrdersToLicenses")
+}
