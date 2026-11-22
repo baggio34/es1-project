@@ -1,4 +1,4 @@
-import type { OrderPreview } from "./order.ts"
+import type { OrderSignature } from "./order.ts"
 import type { UserSignature } from "./user.ts"
 import type { VehicleSignature } from "./vehicle.ts"
 
@@ -29,17 +29,21 @@ export type RouteStatus =
   | { status: "ON_COURSE" } & OnCourse
   | { status: "COMPLETED" } & Completed
 
-export type Route = {
+export type RouteDetailed = {
   id: string
   driver: UserSignature
   vehicle: VehicleSignature
   createdBy: UserSignature
   createdAt: string
   updatedAt: string
-  orders: OrderPreview[]
 } & RouteStatus
 
+export type RouteWithOrders = RouteDetailed & {
+  orders: OrderSignature[]
+}
+
 export type RoutePreview = {
+  id: string
   driver: UserSignature
   vehicle: VehicleSignature
   status: RouteStatusEnum

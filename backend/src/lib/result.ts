@@ -1,3 +1,5 @@
+import type { ApiResult } from "@/api_result.ts"
+
 export type Result<Ok, Err> = OkResult<Ok, Err> | ErrResult<Ok, Err>;
 
 class OkResult<T, E> {
@@ -12,6 +14,9 @@ class OkResult<T, E> {
     return fn(this.ok);
   }
   unwrap(): T {
+    return this.ok
+  }
+  toApiResult(): ApiResult<T> {
     return this.ok
   }
 }
@@ -29,6 +34,9 @@ class ErrResult<T, E> {
   }
   unwrap(): T {
     throw `ERROR: called unwrap on Err variant of Result type.\nValue of the error stores: '${this.err}'`
+  }
+  toApiResult(): ApiResult<T> {
+    return { error: this.err }
   }
 }
 

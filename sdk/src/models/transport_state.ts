@@ -7,7 +7,7 @@ export type TransportStateEnum =
   | 'ON_ROUTE'
 
 export type TransportState =
-  | { state: 'FREE' }
-  | { state: 'WAITING_OPERATOR_AUTHORIZATION', route: RoutePreview }
-  | { state: 'WAITING_DRIVER_DISPATCH',        route: RoutePreview }
-  | { state: 'ON_ROUTE',                       route: RoutePreview }
+  | { transportState: 'FREE' }
+  | { transportState: 'WAITING_OPERATOR_AUTHORIZATION', route: RoutePreview }
+  | { transportState: 'WAITING_DRIVER_DISPATCH',        route: RoutePreview }
+  | { transportState: 'ON_ROUTE',                       route: RoutePreview }

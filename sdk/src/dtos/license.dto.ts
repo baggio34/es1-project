@@ -1,4 +1,4 @@
-import type { License } from "@/models/license.ts"
+import type { LicenseDetailed } from "@/models/license.ts"
 
 export type CreateLicenseRequest = {
   name: string
@@ -8,6 +8,4 @@ export type UpdateLicenseRequest = {
   name: string
 }
 
-export type getLicensesReply = {
-  licenses: License[]
-}
+export type GetLicensesReply = LicenseDetailed[]

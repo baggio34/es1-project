@@ -1,126 +1,52 @@
-import type { FastifyInstance } from "fastify";
-import { authenticate } from "@/services/authentication/auth.ts";
-import type { UUID } from "node:crypto";
-import { requireTokenSchema } from "@/lib/endpoint.utils.ts";
-import { userManager } from "@/domain/user.manager.ts";
-import { isDriver, isOperator } from "@/lib/user.utils.ts";
-import { OrderGetSchema } from "./dtos/order.dto.ts";
-import { routeManager } from "@/domain/route.manager.ts";
-import { vehicleManager } from "@/domain/vehicle.manager.ts";
-import { getRouteInfo } from "@/lib/route.utils.ts";
-import { RoutesGetAllSchema, type RouteGetReply, type RoutesGetAllReply } from "./dtos/route.dto.ts";
-import Type from "typebox";
+import type { ApiResult } from '@/api_result.ts'
+import { RouteManager } from '@/domain/route.manager.ts'
+import type { GetRouteReply, GetRoutesReply } from '@/dtos/route.dto.ts'
+import { requireDriver, requireOperator } from '@/services/auth/authorization.ts'
+import express, { type NextFunction, type Request, type Response } from 'express'
 
-export default function routeRouter(app: FastifyInstance) {
-  app.get<{ Headers: { token: UUID }, Reply: string | RouteGetReply, Params: { id: UUID } }>(
-    "/routes/:uuid", {
-    schema: requireTokenSchema(OrderGetSchema)
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+export const routeRouter = express.Router()
+  .get("/", requireOperator, handleGetRoutes)
+  .get("/:id", requireRoute, handleGetRoute)
+  .post("/:id/authorize-dispatch", requireRoute, requireOperator, handleAuthorizeRouteDispatch)
+  .post("/:id/unauthorize-dispatch", requireRoute, requireOperator, handleUnauthorizeRouteDispatch)
+  .post("/:id/confirm-dispatch", requireRoute, requireDriver, handleConfirmRouteDispatch)
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
 
-    const route = routeManager.get(id)
-    if (!route) {
-      res.status(400).send("no such route")
-      return
-    }
+async function requireRoute(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  const route = await RouteManager.getInstance().getInternal(req.params.id)
+  if (!route) {
+    res.status(404).send(`Route not found. id: '${req.params.id}'`)
+    return
+  }
 
-    const routeInfo = getRouteInfo(route)
-    res.status(200).send(routeInfo)
-  })
+  req.route = route
+  next()
+}
 
-  app.get<{ Headers: { token: UUID }, Reply: string | RoutesGetAllReply }>(
-    "/routes", {
-    schema: requireTokenSchema(RoutesGetAllSchema)
-  }, (req, res) => {
-    const token = req.headers.token
+async function handleGetRoute(req: Request<{}, ApiResult<GetRouteReply>>, res: Response) {
+  const route = await RouteManager.getInstance().get(req.route!.id)
+  
+  res.status(!route ? 404 : 200).send(route)
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr || isDriver(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleGetRoutes(_req: Request<{}, ApiResult<GetRoutesReply>>, res: Response) {
+  res.status(200).send(await RouteManager.getInstance().getAll())
+}
 
-    const routes = routeManager.getAll().map(route => ({
-      route,
-      vehicle: vehicleManager.get(route.vehicleId)!,
-      driver: userManager.get(route.driverId)!,
-    }))
-    res.status(200).send(routes)
-  })
+async function handleAuthorizeRouteDispatch(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await RouteManager.getInstance().authorizeDispatch(req.user!, req.route!)
 
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/authorize-dispatch", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "").toApiResult())
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isOperator(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleUnauthorizeRouteDispatch(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await RouteManager.getInstance().unauthorizeDispatch(req.route!)
 
-    const result = routeManager.authorizeDispatch(requester.ok.username, id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
-    res.status(200).send("route authorized for dispatch")
-  })
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "").toApiResult())
+}
 
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/unauthorize-dispatch", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+async function handleConfirmRouteDispatch(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await RouteManager.getInstance().confirmDispatch(req.user!, req.route!)
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isOperator(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const result = routeManager.unauthorizeDispatch(requester.ok.username, id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
-    res.status(200).send("route unauthorized for dispatch")
-  })
-
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: UUID } }>(
-    "/routes/:uuid/confirm-dispatch", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
-
-    const requester = authenticate(token)
-    if (requester.isErr || !isDriver(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const route = routeManager.get(id)
-    if (!route || route.driverId != requester.ok.username) {
-      res.status(400).send("bad request: no such route or not driver of that route")
-      return
-    }
-
-    const result = routeManager.confirmDispatch(route.driverId)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
-    res.status(200).send("dispatch confirmed")
-  })
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "").toApiResult())
 }

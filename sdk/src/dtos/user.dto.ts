@@ -1,6 +1,10 @@
-import type { UserDetailed } from "@/models/user.ts"
+import type { DriverPreview, UserDetailed, UserPreview } from "@/models/user.ts"
 
 export type GetUserReply = UserDetailed
+
+export type GetUsersReply = UserPreview[]
+
+export type GetDriversReply = DriverPreview[]
 
 type CreateUserRole =
   | { role: 'MANAGER' }

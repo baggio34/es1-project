@@ -1,7 +1,9 @@
 import type { CreateVehicleRequest, UpdateVehicleRequest } from "@/dtos/vehicle.dto.ts"
 import type { PrismaClient, User, Vehicle } from "@/generated/prisma/client.ts";
+import { serializeDates } from "@/lib/date.utils.ts";
 import { Err, Ok, type Result } from "@/lib/result.ts";
 import { isManager } from "@/lib/user.utils.ts";
+import type { VehicleDetailed, VehiclePreview } from "@/models/vehicle.ts";
 import { PrismaContext } from "@/services/database/prisma_context.ts";
 import assert from "assert";
 
@@ -26,14 +28,35 @@ export class VehicleManager {
   /**
    * Retorna um veículo dado sua placa.
    */
-  public async get(plate: string): Promise<Vehicle | null> {
-    return await this.prisma.vehicle.findFirst({
-      where: { plate }
+  public async get(plate: string): Promise<VehicleDetailed | null> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { plate },
+      omit: { createdById: true, routeId: true },
+      include: {
+        licenses: {
+          select: { license: { select: { id: true, name: true } } }
+        },
+        createdBy: {
+          select: { username: true, name: true, id: true, }
+        },
+        route: {
+          select: {
+            id: true,
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            status: true,
+          }
+        }
+      }
     })
+
+    if (!vehicle) return null
+    return {
+      ...serializeDates(vehicle),
+      licenses: vehicle.licenses.map(l => l.license),
+    } as VehicleDetailed
   }
-  /**
-   * Retorna um veículo dado sua placa somente se ele estiver ativo.
-   */
+
   public async getActive(plate: string): Promise<Vehicle | null> {
     return await this.prisma.vehicle.findFirst({
       where: { plate, isActive: true }
@@ -43,15 +66,26 @@ export class VehicleManager {
   /**
    * Retorna todos os veículos.
    */
-  public async getAll(): Promise<Vehicle[]> {
-    return await this.prisma.vehicle.findMany()
+  public async getAll(): Promise<VehiclePreview[]> {
+    return await this.prisma.vehicle.findMany({
+      select: {
+        id: true,
+        model: true,
+        plate: true,
+        transportState: true,
+        color: true,
+        internalVolume: true,
+        maxLoad: true,
+        isActive: true,
+      }
+    })
   }
 
   /**
    * Adiciona um novo veículo.
    * @param requesterId nome de usuário do gerente ou admin.
    */
-  public async create(creator: User, data: CreateVehicleRequest): Promise<Result<'', 'plateTaken'>> {
+  public async create(creator: User, { licenseIds, ...data }: CreateVehicleRequest): Promise<Result<'', 'plateTaken'>> {
     assert(creator.isActive && isManager(creator))
 
     try {
@@ -60,7 +94,7 @@ export class VehicleManager {
           ...data,
           licenses: {
             createMany: {
-              data: data.licenseIds.map(l => ({ licenseId: l }))
+              data: licenseIds.map(l => ({ licenseId: l }))
             }
           },
           createdBy: {
@@ -78,7 +112,7 @@ export class VehicleManager {
    * Altera os dados de um veículo por pedido de `requesterId`.
    * @param requesterId nome de usuário do gerente ou admin.
    */
-  public async update(requester: User, plate: string, data: UpdateVehicleRequest): Promise<Result<'', 'noSuchVehicle' | 'badRequest' | 'plateTaken'>> {
+  public async update(requester: User, plate: string, { licenseIds, ...data }: UpdateVehicleRequest): Promise<Result<'', 'noSuchVehicle' | 'badRequest' | 'plateTaken'>> {
     assert(isManager(requester))
      
     // Checar se o veículo existe
@@ -95,11 +129,11 @@ export class VehicleManager {
         where: { plate },
         data: {
           ...data,
-          licenses: data.licenseIds
+          licenses: licenseIds
             ? {
                 createMany: {
                   skipDuplicates: true,
-                  data: data.licenseIds.map(l => ({ licenseId: l }))
+                  data: licenseIds.map(l => ({ licenseId: l }))
                 }
               }
             : undefined
@@ -107,9 +141,9 @@ export class VehicleManager {
       })
 
       // Remover licensas antigas
-      if (data.licenseIds) {
+      if (licenseIds) {
         await this.prisma.vehicleToLicense.deleteMany({
-          where: { vehicleId: vehicle.id, licenseId: { notIn: data.licenseIds } }
+          where: { vehicleId: vehicle.id, licenseId: { notIn: licenseIds } }
         })
       }
     } catch (e) {

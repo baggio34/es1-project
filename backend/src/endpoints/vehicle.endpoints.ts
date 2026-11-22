@@ -1,99 +1,42 @@
-import type { FastifyInstance } from "fastify";
-import Type from "typebox";
-import { authenticate } from "@/services/authentication/auth.ts";
-import type { UUID } from "node:crypto";
-import { requireTokenSchema, payloadRequireTokenSchema } from "@/lib/endpoint.utils.ts";
-import { isOperator } from "@/lib/user.utils.ts";
-import { VehiclePatchSchema, VehicleRegistrationSchema, type VehicleGetReply, type VehiclePatchPayload, type VehicleRegistrationPayload } from "./dtos/vehicle.dto.ts";
-import { vehicleManager } from "@/domain/vehicle.manager.ts";
-import { VehicleSchema, type Vehicle } from "@/models/vehicle.ts";
-import { userManager } from "@/domain/user.manager.ts";
+import type { ApiResult } from '@/api_result.ts'
+import { VehicleManager } from '@/domain/vehicle.manager.ts'
+import type { CreateVehicleRequest, GetVehicleReply, GetVehiclesReply, UpdateVehicleRequest } from '@/dtos/vehicle.dto.ts'
+import { requireManager, requireOperator } from '@/services/auth/authorization.ts'
+import express, { type Request, type Response } from 'express'
 
-export default function vehicleRouter(app: FastifyInstance) {
-  app.post<{ Body: VehicleRegistrationPayload, Headers: { token: UUID } }>(
-    "/vehicles", {
-    schema: payloadRequireTokenSchema(VehicleRegistrationSchema, Type.String())
-  }, (req, res) => {
-    const data = req.body
-    const user = authenticate(req.headers.token)
+export const vehicleRouter = express.Router()
+  .post("/", requireManager, handleCreateVehicle)
+  .patch("/:plate", requireManager, handleUpdateVehicle)
+  .get("/:plate", handleGetVehicle)
+  .get("/", requireOperator, handleGetVehicles)
 
-    if (user.isErr) {
-      res.status(401).send("invalid session")
-      return
-    }
 
-    const result = vehicleManager.register(user.ok.username, data)
-    if (result.isErr) {
-      if (result.err == 'notAuthorized') res.status(401).send("not authorized")
-      else res.status(400).send("plate already registered")
-      return
-    }
+async function handleCreateVehicle(req: Request<{}, ApiResult<'created'>, CreateVehicleRequest>, res: Response) {
+  const result = await VehicleManager.getInstance().create(req.user!, req.body)
 
-    res.status(200).send("registered")
-  })
+  res.status(result.isErr ? 400 : 201).send(result.map(() => "created").toApiResult())
+}
 
-  app.patch<{ Body: VehiclePatchPayload, Headers: { token: UUID }, Params: { plate: string } }>(
-    "/vehicles/:plate", {
-    schema: payloadRequireTokenSchema(VehiclePatchSchema, Type.String())
-  }, (req, res) => {
-    const data = req.body
-    const token = req.headers.token
-    const plate = req.params.plate
+async function handleUpdateVehicle(req: Request<{ plate: string }, ApiResult<'updated'>, UpdateVehicleRequest>, res: Response) {
+  const { user, params, body } = req
+  const result = await VehicleManager.getInstance().update(user!, params.plate, body)
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
+  res.status(result.isErr ? 400 : 201).send(result.map(() => "updated").toApiResult())
+}
 
-    const result = vehicleManager.patch(requester.ok.username, plate, data)
-    if (result.isErr) {
-      if (result.err == 'notAuthorized') res.status(401).send("not authorized")
-      else res.status(400).send("no such vehicle")
-      return
-    }
+async function handleGetVehicle(req: Request<{ plate: string }, ApiResult<GetVehicleReply>>, res: Response) {
+  const result = await VehicleManager.getInstance().get(req.params.plate)
 
-    res.status(200).send("patched")
-  })
+  if (!result) {
+    res.status(404).send({ error: `vehicle of plate '${req.params.plate}' not found.` })
+    return
+  }
 
-  app.get<{ Headers: { token: UUID }, Reply: string | VehicleGetReply, Params: { plate: string } }>(
-    "/vehicles/:plate", {
-    schema: requireTokenSchema(VehicleSchema)
-  }, (req, res) => {
-    const token = req.headers.token
-    const plate = req.params.plate
+  res.status(200).send(result)
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleGetVehicles(_req: Request<{}, ApiResult<GetVehiclesReply>>, res: Response) {
+  const result = await VehicleManager.getInstance().getAll()
 
-    const vehicle = vehicleManager.get(plate)
-    if (!vehicle) {
-      res.status(400).send("no such vehicle")
-      return
-    }
-
-    res.status(200).send({
-      vehicle,
-      registeredBy: userManager.get(vehicle.registeredBy)!,
-    })
-  })
-
-  app.get<{ Headers: { token: UUID }, Reply: string | Vehicle[] }>(
-    "/vehicles", {
-    schema: requireTokenSchema(Type.Array(VehicleSchema))
-  }, (req, res) => {
-    const token = req.headers.token
-
-    const requester = authenticate(token)
-    if (requester.isErr || !isOperator(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const vehicles = vehicleManager.getAll().filter(v => v.condition == 'active')
-    res.status(200).send(vehicles)
-  })
+  res.status(200).send(result)
 }

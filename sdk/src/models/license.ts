@@ -1,7 +1,12 @@
 import type { UserSignature } from "./user.ts"
 
-export type License = {
+export type LicenseDetailed = {
   id: string
   name: string
-  registeredBy: UserSignature
+  createdBy: UserSignature
+}
+
+export type LicensePreview = {
+  id: string
+  name: string
 }

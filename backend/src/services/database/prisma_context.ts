@@ -12,6 +12,7 @@ export class PrismaContext {
   }
 
   public static setClient(client: PrismaClient) {
+    console.log("[INFO]: Prisma client set up.")
     this.prismaClient = client
   }
 } 

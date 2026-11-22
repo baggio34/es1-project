@@ -1,10 +1,11 @@
 import { Err, Ok, type Result } from "@/lib/result.ts"
-import type { CancelOrderRequest, SwapOrderIndex, CreateOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest } from "@/dtos/order.dto.ts"
+import type { CancelOrderRequest, SwapOrderIndex, CreateOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest, UpdateOrderRequest } from "@/dtos/order.dto.ts"
 import { isClerk, isDriver, isManager, isOperator } from "@/lib/user.utils.ts"
 import assert from "assert"
 import type { Order, PrismaClient, User } from "@/generated/prisma/client.ts"
 import { PrismaContext } from "@/services/database/prisma_context.ts"
-import { nonCancellableOrderStatuses } from "@/models/order.ts"
+import { nonCancellableOrderStatuses, type OrderDetailed, type OrderPreview } from "@/models/order.ts"
+import { serializeDates } from "@/lib/date.utils.ts"
 
 /**
  * Gerencia os pedidos do sistema.
@@ -24,25 +25,86 @@ export class OrderManager {
     return this.instance
   }
 
+  public async getInternal(id: number): Promise<Order | null> {
+    return await this.prisma.order.findFirst({ where: { id } })
+  }
+
   /**
    * Retorna um pedido dado seu id.
    */
-  public async get(id: number): Promise<Order | null> {
-    return await this.prisma.order.findFirst({ where: { id } })
+  public async get(id: number): Promise<OrderDetailed | null> {
+    const order = await this.prisma.order.findFirst({
+      where: { id },
+      include: {
+        createdBy: { select: { username: true, name: true, id: true, } },
+        rejectedBy: { select: { username: true, name: true, id: true, } },
+        approvedBy: { select: { username: true, name: true, id: true, } },
+        paymentConfirmedBy: { select: { username: true, name: true, id: true, } },
+        loadedBy: { select: { username: true, name: true, id: true, } },
+        accidentResolvedBy: { select: { username: true, name: true, id: true, } },
+        cancelledBy: { select: { username: true, name: true, id: true, } },
+
+        licenses: { select: { license: { select: { id: true, name: true } } } },
+
+        route: {
+          include: {
+            createdBy: { select: { username: true, name: true, id: true, } },
+            dispatchApprovedBy: { select: { username: true, name: true, id: true, } },
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            orders: {
+              select: {
+                id: true,
+                destination: true,
+                clientName: true,
+                clientRegistration: true,
+                status: true,
+                routeIndex: true,
+              }
+            },
+          }
+        }
+      }
+    })
+
+    if (!order) return null
+    return {
+      ...serializeDates(order),
+      route: order.route ? serializeDates(order.route) : null,
+      licenses: order.licenses.map(l => l.license),
+    } as OrderDetailed
   }
 
   /**
    * Retorna todos os pedidos.
    */
-  public async getAll(): Promise<Order[]> {
-    return await this.prisma.order.findMany()
+  public async getAll(): Promise<OrderPreview[]> {
+    return await this.prisma.order.findMany({
+      select: {
+        id: true,
+        destination: true,
+        clientName: true,
+        clientRegistration: true,
+        weight: true,
+        volume: true,
+        status: true,
+        route: {
+          select: {
+            id: true,
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            status: true,
+          }
+        }
+      }
+    }) as OrderPreview[]
   }
 
   /**
    * Cria um novo pedido por parte do atendente `clerk`.
    * Retorna o id do pedido.
    */
-  public async create(clerk: User, data: CreateOrderRequest): Promise<Result<number, void>> {
+  public async create(clerk: User, { licenseIds, ...data }: CreateOrderRequest): Promise<Result<number, void>> {
     assert(clerk.isActive && isClerk(clerk))
 
     const order = await this.prisma.order.create({
@@ -50,7 +112,7 @@ export class OrderManager {
         ...data,
         licenses: {
           createMany: {
-            data: data.licenseIds.map(l => ({ licenseId: l }))
+            data: licenseIds.map(l => ({ licenseId: l }))
           }
         },
         createdById: clerk.id,
@@ -58,6 +120,38 @@ export class OrderManager {
     })
 
     return Ok(order.id)
+  }
+
+  /**
+   * Altera os dados de um pedido por ordem de `requester`.
+   * @param requester gerente ou admin.
+   */
+  public async update(requester: User, order: Order, { licenseIds, ...data }: UpdateOrderRequest): Promise<Result<'', 'badRequest'>> {
+    assert(isManager(requester))
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        ...data,
+        licenses: licenseIds
+          ? {
+              createMany: {
+                skipDuplicates: true,
+                data: licenseIds.map(l => ({ licenseId: l }))
+              }
+            }
+          : undefined
+      }
+    })
+
+    // Remover licensas antigas
+    if (licenseIds) {
+      await this.prisma.orderToLicense.deleteMany({
+        where: { orderId: order.id, licenseId: { notIn: licenseIds } }
+      })
+    }
+
+    return Ok('')
   }
 
   /**

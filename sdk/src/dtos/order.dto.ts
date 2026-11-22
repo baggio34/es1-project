@@ -1,8 +1,8 @@
-import type { Order, OrderPreview } from "@/models/order.ts"
+import type { OrderDetailed, OrderPreview } from "@/models/order.ts"
 
 export type GetOrdersReply = OrderPreview[]
 
-export type GetOrderReply = Order
+export type GetOrderReply = OrderDetailed
 
 export type CreateOrderRequest = {
   description: string
@@ -41,8 +41,8 @@ export type CancelOrderRequest = {
 }
 
 export type LoadOrderRequest = {
-  driverId: string
-  vehicleId: string
+  driverUsername: string
+  vehiclePlate: string
 }
 
 export type SwapOrderIndex = {

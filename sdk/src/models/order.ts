@@ -1,6 +1,5 @@
-import type { RoutePreview } from "./route.ts"
-import type { License } from "./license.ts"
-import type { VehicleSignature } from "./vehicle.ts"
+import type { RouteDetailed, RoutePreview } from "./route.ts"
+import type { LicensePreview } from "./license.ts"
 import type { UserSignature } from "./user.ts"
 
 export const cancellableOrderStatuses = [
@@ -30,9 +29,7 @@ export type OrderStatusPreview =
     }
   | {
       status: 'IN_PREPARATION' | 'LOADED' | 'WAITING_DISPATCH' | 'ON_ROUTE' | 'ACCIDENT' | 'RESOLVED_ACCIDENT' | 'ARRIVED'
-      driver: UserSignature,
-      vehicle: VehicleSignature,
-      routeIndex: number,
+      route: RoutePreview
     }
 
 type WaitingApproval = {}
@@ -56,7 +53,7 @@ type InPreparation = WaitingPayment & {
 type Loaded = InPreparation & {
   loadedBy: UserSignature
   loadedOn: string
-  route: RoutePreview
+  route: RouteDetailed
   routeIndex: number
 }
 
@@ -103,7 +100,7 @@ type NonCancellableOrderStatus =
 
 export type OrderStatus = CancellableOrderStatus | NonCancellableOrderStatus
 
-export type Order = {
+export type OrderDetailed = {
   id: number
   description: string
   destination: string
@@ -114,7 +111,7 @@ export type Order = {
   createdBy: UserSignature
   createdAt: string
   updatedAt: string
-  licenses: License[]
+  licenses: LicensePreview[]
 } & OrderStatus
 
 export type OrderPreview = {
@@ -125,3 +122,13 @@ export type OrderPreview = {
   weight: number
   volume: number
 } & OrderStatusPreview
+
+// Usado para mostrar a prévia dos pedidos na rota
+export type OrderSignature = {
+  id: number
+  destination: string
+  clientName: string
+  clientRegistration: string
+  status: OrderStatusEnum
+  routeIndex: number
+}

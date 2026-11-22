@@ -1,117 +1,47 @@
-import type { FastifyInstance } from "fastify";
-import Type from "typebox";
-import { UserPatchSchema, UserRegistrationSchema, type UserGetReply, type UserPatchPayload, type UserRegistrationPayload } from "./dtos/user.dto.ts";
-import { authenticate } from "@/services/authentication/auth.ts";
-import type { UUID } from "node:crypto";
-import { requireTokenSchema, payloadRequireTokenSchema, postSchema } from "@/lib/endpoint.utils.ts";
-import { userManager } from "@/domain/user.manager.ts";
-import { LoginReplySchema, LoginSchema, type LoginPayload, type LoginReply } from "./dtos/auth.dto.ts";
-import { isManager, obfuscateCpf } from "@/lib/user.utils.ts";
-import { UserSchema, type User } from "@/models/user.ts";
+import type { ApiResult } from '@/api_result.ts'
+import { UserManager } from '@/domain/user.manager.ts'
+import type { CreateUserRequest, GetUsersReply, GetUserReply, UpdateUserRequest } from '@/dtos/user.dto.ts'
+import { isManager, obfuscateCpf } from '@/lib/user.utils.ts'
+import { requireManager } from '@/services/auth/authorization.ts'
+import express, { type Request, type Response } from 'express'
 
-export default function userRouter(app: FastifyInstance) {
-  app.post<{ Body: UserRegistrationPayload, Headers: { token: UUID } }>(
-    "/users/register", {
-    schema: payloadRequireTokenSchema(UserRegistrationSchema, Type.String())
-  }, (req, res) => {
-    const data = req.body
-    const user = authenticate(req.headers.token)
+export const userRouter = express.Router()
+  .post("/", requireManager, handleCreateUser)
+  .patch("/:username", requireManager, handleUpdateUser)
+  .get("/:username", handleGetUser)
+  .get("/", handleGetUsers)
 
-    if (user.isErr) {
-      res.status(401).send("invalid session")
-      return
-    }
 
-    const result = userManager.register(user.ok.username, data)
-    if (result.isErr) {
-      if (result.err == 'notAuthorized') res.status(401).send("not authorized")
-      else res.status(400).send("username already taken")
-      return
-    }
+async function handleCreateUser(req: Request<{}, ApiResult<'created'>, CreateUserRequest>, res: Response) {
+  const result = await UserManager.getInstance().create(req.user!, req.body)
 
-    res.status(200).send("registered")
-  })
+  res.status(result.isErr ? 400 : 201).send(result.map(() => "created").toApiResult())
+}
 
-  app.patch<{ Body: UserPatchPayload, Headers: { token: UUID }, Params: { username: string } }>(
-    "/users/:username", {
-    schema: payloadRequireTokenSchema(UserPatchSchema, Type.String())
-  }, (req, res) => {
-    const data = req.body
-    const token = req.headers.token
-    const username = req.params.username
+async function handleUpdateUser(req: Request<{ username: string }, ApiResult<'updated'>, UpdateUserRequest>, res: Response) {
+  const { user, params, body } = req
+  const result = await UserManager.getInstance().update(user!, params.username, body)
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
+  res.status(result.isErr ? 400 : 201).send(result.map(() => "updated").toApiResult())
+}
 
-    const result = userManager.patch(requester.ok.username, username, data)
-    if (result.isErr) {
-      if (result.err == 'notAuthorized') res.status(401).send("not authorized")
-      else res.status(400).send("no such user")
-      return
-    }
+async function handleGetUser(req: Request<{ username: string }, ApiResult<GetUserReply>>, res: Response) {
+  const { user, params } = req
+  const result = await UserManager.getInstance().get(params.username)
 
-    res.status(200).send("patched")
-  })
+  if (!result) {
+    res.status(404).send({ error: `user @${params.username} not found.` })
+    return
+  }
 
-  app.get<{ Headers: { token: UUID }, Reply: string | UserGetReply, Params: { username: string } }>(
-    "/users/:username", {
-    schema: requireTokenSchema(UserSchema)
-  }, (req, res) => {
-    const token = req.headers.token
-    const username = req.params.username
+  if (!isManager(user)) result.cpf = obfuscateCpf(result.cpf)
+  res.status(200).send(result)
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleGetUsers(req: Request<{}, ApiResult<GetUsersReply>>, res: Response) {
+  const { user } = req
+  const result = await UserManager.getInstance().getAll()
 
-    const user = userManager.get(username)
-    if (!user) {
-      res.status(400).send("no such user")
-      return
-    }
-
-    res.status(200).send({
-      registeredBy: userManager.get(user.registeredBy)!,
-      user: {
-        ...user,
-        cpf: isManager(requester.ok) ? user.cpf : obfuscateCpf(user.cpf)
-      },
-    })
-  })
-
-  app.get<{ Headers: { token: UUID }, Reply: string | User[] }>(
-    "/users", {
-    schema: requireTokenSchema(Type.Array(UserSchema))
-  }, (req, res) => {
-    const token = req.headers.token
-
-    const requester = authenticate(token)
-    if (requester.isErr || !isManager(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const users = userManager.getAll()
-    res.status(200).send(users)
-  })
-
-  app.post<{ Body: LoginPayload, Reply: LoginReply | string }>(
-    "/users/login", {
-    schema: postSchema(LoginSchema, LoginReplySchema)
-  }, (req, res) => {
-    const data = req.body
-    const result = userManager.login(data)
-
-    if (result.isErr) {
-      res.status(400).send("invalid credentials")
-      return
-    }
-
-    res.status(200).send(result.ok)
-  })
+  if (!isManager(user)) result.map(u => u.cpf = obfuscateCpf(u.cpf))
+  res.status(200).send(result)
 }

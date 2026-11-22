@@ -1,4 +1,4 @@
-import type { License } from "./license.ts"
+import type { LicensePreview } from "./license.ts"
 import type { TransportState } from "./transport_state.ts"
 
 export type RoleEnum =
@@ -13,11 +13,10 @@ export type Role =
   | { role: 'CLERK' }
   | { role: 'ADMIN' }
   | { role: 'OPERATOR' }
-  | {
+  | ({
     role: 'DRIVER',
-    transportState: TransportState
-    licenses: License[]
-  }
+    licenses: LicensePreview[]
+    } & TransportState)
 
 export type UserDetailed = {
   id: string
@@ -25,11 +24,10 @@ export type UserDetailed = {
   name: string
   cpf: string
   isActive: boolean
-  role: Role
   createdBy: UserSignature
   createdAt: string
   updatedAt: string
-}
+} & Role
 
 export type UserPreview = {
   id: string
@@ -47,3 +45,11 @@ export type UserSignature = {
   name: string,
 } 
 
+export type DriverPreview = {
+  id: string
+  username: string
+  name: string
+  cpf: string
+  isActive: boolean
+  role: 'DRIVER'
+} & TransportState

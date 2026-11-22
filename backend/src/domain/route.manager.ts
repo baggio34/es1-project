@@ -6,6 +6,8 @@ import { PrismaContext } from "@/services/database/prisma_context.ts"
 import type { GetRouteSuggestionsReply } from "@/dtos/route.dto.ts"
 import type { VehicleSignature } from "@/models/vehicle.ts"
 import type { UserSignature } from "@/models/user.ts"
+import type { RoutePreview, RouteWithOrders } from "@/models/route.ts"
+import { serializeDates } from "@/lib/date.utils.ts"
 
 type LoadOrderError =
   | 'orderNotInPreparation'
@@ -35,15 +37,50 @@ export class RouteManager {
   /**
    * Retorna uma rota dado seu `id`.
    */
-  public async get(id: string): Promise<Route | null> {
+  public async get(id: string): Promise<RouteWithOrders | null> {
+    const route = await this.prisma.route.findFirst({
+      where: { id },
+      include: {
+        createdBy: { select: { username: true, name: true, id: true, } },
+        dispatchApprovedBy: { select: { username: true, name: true, id: true, } },
+        vehicle: { select: { id: true, color: true, model: true, plate: true } },
+        driver: { select: { id: true, name: true, username: true } },
+        orders: {
+          select: {
+            id: true,
+            destination: true,
+            clientName: true,
+            clientRegistration: true,
+            status: true,
+            routeIndex: true,
+          }
+        }
+      }
+    })
+
+    if (!route) return null
+    return {
+      ...serializeDates(route),
+    } as RouteWithOrders
+  }
+
+  public async getInternal(id: string): Promise<Route | null> {
     return await this.prisma.route.findFirst({ where: { id } })
   }
 
   /**
-   * Retorna todas as rotas.
+   * Retorna todas as rotas. Permite filtrar por um motorista
    */
-  public async getAll(): Promise<Route[]> {
-    return await this.prisma.route.findMany()
+  public async getAll(driverUsername?: string): Promise<RoutePreview[]> {
+    return await this.prisma.route.findMany({
+      where: { driver: { username: driverUsername } },
+      select: {
+        id: true,
+        status: true,
+        vehicle: { select: { id: true, color: true, model: true, plate: true } },
+        driver: { select: { id: true, name: true, username: true } },
+      }
+    })
   }
 
   /**
@@ -164,7 +201,7 @@ export class RouteManager {
   public async unloadOrder(order: Order): Promise<Result<"", "orderNotInLoadedStatus">> {
     if (order.status != 'LOADED') return Err('orderNotInLoadedStatus')
     const ordersInRoute = await this.prisma.order.count({ where: { routeId: order.routeId! } })
-    const route = (await this.get(order.routeId!))!
+    const route = await this.prisma.route.findFirstOrThrow({ where: { id: order.routeId! } })
 
     // Se for o único pedido da rota, deve deletar a rota e liberar o motorista e veículo.
     if (ordersInRoute == 1) {
@@ -267,7 +304,8 @@ export class RouteManager {
   /**
    * Confirma que o motorista começou o trajeto.
    */
-  public async confirmDispatch(route: Route): Promise<Result<"", "driverNotAuthorized">> {
+  public async confirmDispatch(driver: User, route: Route): Promise<Result<"", "notAuthorized" | "driverNotAuthorized">> {
+    if (driver.id != route.driverId) return Err('notAuthorized')
     if (route.status != 'WAITING_DRIVER_DISPATCH') return Err('driverNotAuthorized')
 
     await this.prisma.order.updateMany({
@@ -322,12 +360,12 @@ export class RouteManager {
     })
 
     const freeDrivers = await this.prisma.user.findMany({
-      where: { transportState: "FREE" },
+      where: { transportState: "FREE", isActive: true },
       include: { licenses: { select: { licenseId: true } } },
     })
 
     const freeVehicles = await this.prisma.vehicle.findMany({
-      where: { transportState: "FREE" },
+      where: { transportState: "FREE", isActive: true },
       include: { licenses: { select: { licenseId: true } } },
     })
 

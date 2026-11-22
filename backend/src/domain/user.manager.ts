@@ -6,6 +6,9 @@ import { isAdmin, isDriver, isManager } from "@/lib/user.utils.ts";
 import { PrismaContext } from "@/services/database/prisma_context.ts";
 import assert from "assert";
 import { hash } from "crypto";
+import type { DriverPreview, UserDetailed, UserPreview } from "@/models/user.ts";
+import { slugify } from "@/lib/string.utils.ts";
+import { serializeDates } from "@/lib/date.utils.ts";
 
 /**
  * Gerencia os usuários do sistema, contém ações que afetam qualquer cargo de usuário.
@@ -25,38 +28,100 @@ export class UserManager {
     return this.instance
   }
 
-  public async get(username: string): Promise<User | null> {
+  /**
+   * Retorna um usuário dado seu `username`.
+   */
+  public async get(username: string): Promise<UserDetailed | null> {
+    const user = await this.prisma.user.findFirst({
+      where: { username },
+      omit: { passwordHash: true, createdById: true, routeId: true },
+      include: {
+        licenses: {
+          select: { license: { select: { id: true, name: true } } }
+        },
+        createdBy: {
+          select: { username: true, name: true, id: true, }
+        },
+        route: {
+          select: {
+            id: true,
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            status: true,
+          }
+        }
+      }
+    })
+
+    if (!user) return null
+    return {
+      ...serializeDates(user),
+      licenses: user.licenses.map(l => l.license),
+    } as UserDetailed
+  }
+
+  public async getActiveDriver(username: string): Promise<User | null> {
     return await this.prisma.user.findFirst({
-      where: { username }
+      where: { username, isActive: true, role: "DRIVER" }
     })
   }
 
   /**
-   * Retorna um usuário dado seu `username` somente se ele estiver ativo.
+   * Retorna um usuário dado seu `token`.
    */
-  public async getActive(username: string): Promise<User | null> {
+  public async getByToken(token: string): Promise<User | null> {
     return await this.prisma.user.findFirst({
-      where: { username, isActive: true }
+      where: {
+        accessToken: token,
+        isActive: true,
+      }
     })
   }
 
   /**
    * Retorna todos os usuários.
    */
-  public async getAll(): Promise<User[]> {
-    return await this.prisma.user.findMany()
+  public async getAll(): Promise<UserPreview[]> {
+    return await this.prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        cpf: true,
+        isActive: true,
+        role: true,
+      }
+    })
   }
 
   /**
    * Retorna todos os motoristas ativos.
    */
-  public async getDrivers(): Promise<User[]> {
+  public async getDrivers(): Promise<DriverPreview[]> {
     return await this.prisma.user.findMany({
       where: {
         isActive: true,
         role: "DRIVER",
-      }
-    })
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        cpf: true,
+        isActive: true,
+        role: true,
+        transportState: true,
+        route: {
+          select: {
+            id: true,
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            status: true,
+          }
+        }
+      },
+    }) as DriverPreview[]
+
   }
 
   /**
@@ -70,8 +135,11 @@ export class UserManager {
     try {
       await this.prisma.user.create({
         data: {
-          ...data,
-          licenses: data.role == "DRIVER"
+          name: data.name,
+          cpf: data.cpf,
+          role: data.role,
+          username: slugify(data.username),
+          licenses: data.role == "DRIVER" && data.licenseIds.length > 0
             ? {
                 createMany: {
                   data: data.licenseIds.map(l => ({ licenseId: l }))
@@ -83,6 +151,7 @@ export class UserManager {
         }
       })
     } catch (e) {
+      console.error(e)
       return Err('usernameTaken')
     }
     return Ok('')
@@ -90,7 +159,6 @@ export class UserManager {
 
   /**
    * Realiza o login e retorna o novo token de acesso para o usuário caso bem sucedido.
-   * Apenas admins podem criar gerentes ou outros admins.
    */
   public async login({ username, password }: LoginRequest): Promise<Result<LoginReply, 'invalidCredentials'>> {
     const user = await this.prisma.user.findFirst({
@@ -107,8 +175,28 @@ export class UserManager {
 
     return Ok({
       token: accessToken,
-      ...user
+      name: user.name,
+      username: user.username,
+      role: user.role,
     })
+  }
+
+  /**
+   * Realiza o logout, removendo o token de acesso do usuário, que vai precisar logar novamente.
+   */
+  public async logout(username: string): Promise<Result<'', 'noSuchUser'>> {
+    const user = await this.prisma.user.findFirst({
+      where: { username, isActive: true }
+    })
+
+    if (!user) return Err('noSuchUser')
+
+    await this.prisma.user.update({
+      where: { username },
+      data: { accessToken: null },
+    })
+
+    return Ok('')
   }
 
   /**
@@ -116,7 +204,7 @@ export class UserManager {
    * Apenas admins podem modificar gerentes ou outros admins.
    * @param requester gerente ou admin.
    */
-  public async update(requester: User, username: string, data: UpdateUserRequest): Promise<Result<'', 'noSuchUser' | 'notAuthorized' | 'badRequest' | 'usernameTaken'>> {
+  public async update(requester: User, username: string, { password, licenseIds, ...data }: UpdateUserRequest): Promise<Result<'', 'noSuchUser' | 'notAuthorized' | 'badRequest' | 'usernameTaken' | 'driverNotFree'>> {
     assert(isManager(requester))
 
     const user = await this.prisma.user.findFirst({ where: { username } })
@@ -128,18 +216,23 @@ export class UserManager {
       return Err('usernameTaken')
     }
 
-    const passwordHash = data.password ? hash('sha256', data.password) : undefined
+    // Não pode desativar um motorista que não está livre.
+    if (!data.isActive && user.role == "DRIVER" && user.transportState != "FREE") {
+      return Err('driverNotFree')
+    } 
+
+    const passwordHash = password ? hash('sha256', password) : undefined
     try {
       await this.prisma.user.update({
         where: { username },
         data: {
           ...data,
           passwordHash,
-          licenses: isDriver(user) && data.licenseIds
+          licenses: isDriver(user) && licenseIds
             ? {
                 createMany: {
                   skipDuplicates: true,
-                  data: data.licenseIds.map(l => ({ licenseId: l }))
+                  data: licenseIds.map(l => ({ licenseId: l }))
                 }
               }
             : undefined
@@ -147,9 +240,9 @@ export class UserManager {
       })
 
       // Remover licensas antigas
-      if (isDriver(user) && data.licenseIds) {
+      if (isDriver(user) && licenseIds) {
         await this.prisma.driverToLicense.deleteMany({
-          where: { driverId: user.id, licenseId: { notIn: data.licenseIds } }
+          where: { driverId: user.id, licenseId: { notIn: licenseIds } }
         })
       }
     } catch (e) {

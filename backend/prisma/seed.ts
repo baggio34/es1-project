@@ -6,7 +6,7 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env['DATABASE_URL'] }),
   // Optionally you can pass log options for debugging
   log: ['query', 'info', 'warn', 'error'],
-});
+})
 
 async function updateSuperAdmin() {
   const username = process.env['SUPER_ADMIN_USERNAME'] ?? 'root'

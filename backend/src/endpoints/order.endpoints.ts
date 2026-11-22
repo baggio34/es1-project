@@ -1,238 +1,131 @@
-import type { FastifyInstance } from "fastify";
-import Type from "typebox";
-import { authenticate } from "@/services/authentication/auth.ts";
-import type { UUID } from "node:crypto";
-import { requireTokenSchema, payloadRequireTokenSchema } from "@/lib/endpoint.utils.ts";
-import { userManager } from "@/domain/user.manager.ts";
-import { isClerk, isDriver, isManager, isOperator } from "@/lib/user.utils.ts";
-import type { OrderCreationPayload } from "@/models/order.ts";
-import { OrderCancellationSchema, OrderCreationSchema, OrderGetSchema, OrderLoadingSchema, OrderRejectionSchema, OrdersGetAllSchema, type OrderCancellationPayload, type OrderGetReply, type OrderLoadingPayload, type OrderRejectionPayload, type OrdersGetAllReply } from "./dtos/order.dto.ts";
-import { orderManager } from "@/domain/order.manager.ts";
-import { getOrderInfo } from "@/lib/order.utils.ts";
-import { routeManager } from "@/domain/route.manager.ts";
-import { vehicleManager } from "@/domain/vehicle.manager.ts";
+import type { ApiResult } from '@/api_result.ts'
+import { OrderManager } from '@/domain/order.manager.ts'
+import { RouteManager } from '@/domain/route.manager.ts'
+import { UserManager } from '@/domain/user.manager.ts'
+import { VehicleManager } from '@/domain/vehicle.manager.ts'
+import type { CancelOrderRequest, CreateOrderRequest, GetOrderReply, GetOrdersReply, LoadOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest, UpdateOrderRequest } from '@/dtos/order.dto.ts'
+import { requireClerk, requireDriver, requireManager, requireOperator, requireOperatorOrClerk } from '@/services/auth/authorization.ts'
+import express, { type NextFunction, type Request, type Response } from 'express'
 
-export default function orderRouter(app: FastifyInstance) {
-  app.post<{ Body: OrderCreationPayload, Headers: { token: UUID } }>(
-    "/orders", {
-    schema: payloadRequireTokenSchema(OrderCreationSchema, Type.Integer())
-  }, (req, res) => {
-    const data = req.body
-    const user = authenticate(req.headers.token)
+export const orderRouter = express.Router()
+  .post("/orders", requireClerk, handleCreateOrder)
+  .get("/orders", requireOperatorOrClerk, handleGetOrders)
+  .get("/orders/:id", requireOrder, handleGetOrder)
+  .patch("/orders/:id", requireOrder, requireManager, handleUpdateOrder)
+  .post("/orders/:id/cancel", requireOrder, requireManager, handleCancelOrder)
+  .post("/orders/:id/reject", requireOrder, requireOperator, handleRejectOrder)
+  .post("/orders/:id/approve", requireOrder, requireOperator, handleApproveOrder)
+  .post("/orders/:id/confirm-payment", requireOrder, requireClerk, handleConfirmOrderPayment)
+  .post("/orders/:id/load", requireOrder, requireOperator, handleLoadOrder)
+  .post("/orders/:id/unload", requireOrder, requireOperator, handleUnloadOrder)
+  .post("/orders/:id/confirm-arrival", requireOrder, requireDriver, handleConfirmOrderArrival)
+  .post("/orders/:id/report-accident", requireOrder, requireDriver, handleReportOrderAccident)
+  .post("/orders/:id/resolve-accident", requireOrder, requireManager, handleResolveOrderAccident)
 
-    if (user.isErr || !isClerk(user.ok)) {
-      res.status(401).send("not authorized")
-      return
-    }
 
-    const result = orderManager.create(user.ok.username, data)
-    if (result.isErr) {
-      res.status(401).send("not authorized")
-      return
-    }
+async function requireOrder(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  const id = Number(req.params.id)
+  if (Number.isNaN(id)) {
+    res.status(400).send("Invalid order id, must be a number")
+    return
+  }
 
-    res.status(200).send(result.ok)
-  })
+  const order = await OrderManager.getInstance().getInternal(id)
+  if (!order) {
+    res.status(404).send(`Order not found. id: '${id}'`)
+    return
+  }
 
-  app.get<{ Headers: { token: UUID }, Reply: string | OrderGetReply, Params: { id: number } }>(
-    "/orders/:id", {
-    schema: requireTokenSchema(OrderGetSchema)
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  req.order = order
+  next()
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleCreateOrder(req: Request<{}, ApiResult<string>, CreateOrderRequest>, res: Response) {
+  const result = await OrderManager.getInstance().create(req.user!, req.body)
 
-    const order = orderManager.get(id)
-    if (!order) {
-      res.status(400).send("no such order")
-      return
-    }
+  res.status(result.isErr ? 400 : 201).send(result.map(() => "created").toApiResult())
+}
 
-    const orderInfo = getOrderInfo(order)
-    res.status(200).send(orderInfo)
-  })
+async function handleGetOrders(_req: Request<{}, ApiResult<GetOrdersReply>>, res: Response) {
+  res.status(200).send(await OrderManager.getInstance().getAll())
+}
 
-  app.get<{ Headers: { token: UUID }, Reply: string | OrdersGetAllReply }>(
-    "/orders", {
-    schema: requireTokenSchema(OrdersGetAllSchema)
-  }, (req, res) => {
-    const token = req.headers.token
+async function handleGetOrder(req: Request<{}, ApiResult<GetOrderReply>>, res: Response) {
+  const result = await OrderManager.getInstance().get(req.order!.id)
 
-    const requester = authenticate(token)
-    if (requester.isErr || isDriver(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+  res.status(!result ? 404 : 200).send(result)
+}
 
-    const orders = orderManager.getAll().map(order => {
-      const route = 'routeId' in order ? routeManager.get(order.routeId)! : undefined
-      if (!route) return { order }
-      return {
-        order,
-        vehicle: vehicleManager.get(route.vehicleId)!,
-        driver: userManager.get(route.driverId)!,
-      }
-    })
-    res.status(200).send(orders)
-  })
+async function handleUpdateOrder(req: Request<{}, ApiResult<string>, UpdateOrderRequest>, res: Response) {
+  const result = await OrderManager.getInstance().update(req.user!, req.order!, req.body)
 
-  app.post<{ Headers: { token: UUID }, Body: OrderRejectionPayload, Reply: string, Params: { id: number } }>(
-    "/orders/:id/reject", {
-    schema: payloadRequireTokenSchema(OrderRejectionSchema, Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "updated").toApiResult())
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isOperator(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleCancelOrder(req: Request<{}, ApiResult<string>, CancelOrderRequest>, res: Response) {
+  const result = await OrderManager.getInstance().cancel(req.user!, req.order!, req.body)
 
-    const result = orderManager.reject(requester.ok.username, id, req.body.reason)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "cancelled").toApiResult())
+}
 
-    res.status(200).send("order rejected")
-  })
+async function handleRejectOrder(req: Request<{}, ApiResult<string>, RejectOrderRequest>, res: Response) {
+  const result = await OrderManager.getInstance().reject(req.user!, req.order!, req.body)
 
-  app.post<{ Headers: { token: UUID }, Body: OrderCancellationPayload, Reply: string, Params: { id: number } }>(
-    "/orders/:id/cancel", {
-    schema: payloadRequireTokenSchema(OrderCancellationSchema, Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "rejected").toApiResult())
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isManager(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleApproveOrder(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await OrderManager.getInstance().approve(req.user!, req.order!)
 
-    const result = orderManager.cancel(requester.ok.username, id, req.body.reason)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "approved").toApiResult())
+}
 
-    res.status(200).send("order cancelled")
-  })
+async function handleConfirmOrderPayment(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await OrderManager.getInstance().confirmPayment(req.user!, req.order!)
 
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
-    "/orders/:id/approve", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "confirmed").toApiResult())
+}
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isOperator(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+async function handleLoadOrder(req: Request<{}, ApiResult<string>, LoadOrderRequest>, res: Response) {
+  const { driverUsername, vehiclePlate } = req.body
+  const driver = await UserManager.getInstance().getActiveDriver(driverUsername)
+  const vehicle = await VehicleManager.getInstance().getActive(vehiclePlate)
 
-    const result = orderManager.approve(requester.ok.username, id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
+  if (!driver) {
+    res.status(404).send(`Driver not found. username: '${driverUsername}'`)
+    return
+  }
 
-    res.status(200).send("order approved")
-  })
+  if (!vehicle) {
+    res.status(404).send(`Vehicle not found. plate: '${vehiclePlate}'`)
+    return
+  }
 
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
-    "/orders/:id/confirm-payment", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+  const result = await RouteManager.getInstance().loadOrder(req.user!, req.order!, driver, vehicle)
 
-    const requester = authenticate(token)
-    if (requester.isErr || !isClerk(requester.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "loaded").toApiResult())
+}
 
-    const result = orderManager.confirmPayment(requester.ok.username, id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
+async function handleUnloadOrder(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await RouteManager.getInstance().unloadOrder(req.order!)
 
-    res.status(200).send("payment of order confirmed")
-  })
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "unloaded").toApiResult())
+}
 
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
-    "/orders/:id/confirm-arrival", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+async function handleConfirmOrderArrival(req: Request<{}, ApiResult<string>>, res: Response) {
+  const result = await OrderManager.getInstance().confirmArrival(req.user!, req.order!)
 
-    const driver = authenticate(token)
-    if (driver.isErr || !isDriver(driver.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "unloaded").toApiResult())
+}
 
-    const result = orderManager.confirmArrival(driver.ok.username, id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
+async function handleReportOrderAccident(req: Request<{}, ApiResult<string>, ReportOrderAccidentRequest>, res: Response) {
+  const result = await OrderManager.getInstance().reportAccident(req.user!, req.order!, req.body)
 
-    res.status(200).send("order arrival confirmed")
-  })
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "reported accident").toApiResult())
+}
 
-  app.post<{ Headers: { token: UUID }, Body: OrderLoadingPayload, Reply: string, Params: { id: number } }>(
-    "/orders/:id/load", {
-    schema: payloadRequireTokenSchema(OrderLoadingSchema, Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
+async function handleResolveOrderAccident(req: Request<{}, ApiResult<string>, ResolveOrderAccidentRequest>, res: Response) {
+  const result = await OrderManager.getInstance().resolveAccident(req.user!, req.order!, req.body)
 
-    const operator = authenticate(token)
-    if (operator.isErr || !isOperator(operator.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const { driverId, vehicleId } = req.body
-    const result = routeManager.loadOrder(operator.ok.username, id, driverId, vehicleId)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
-
-    res.status(200).send("order loaded")
-  })
-
-  app.post<{ Headers: { token: UUID }, Reply: string, Params: { id: number } }>(
-    "/orders/:id/unload", {
-    schema: requireTokenSchema(Type.String())
-  }, (req, res) => {
-    const token = req.headers.token
-    const id = req.params.id
-
-    const operator = authenticate(token)
-    if (operator.isErr || !isDriver(operator.ok)) {
-      res.status(401).send("not authorized")
-      return
-    } 
-
-    const result = routeManager.unloadOrder(id)
-    if (result.isErr) {
-      res.status(400).send(result.err)
-      return
-    }
-
-    res.status(200).send("order unloaded")
-  })
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "resolved accident").toApiResult())
 }

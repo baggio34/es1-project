@@ -1,10 +1,10 @@
-import type { Route, RoutePreview } from "@/models/route.ts"
+import type { RoutePreview, RouteWithOrders } from "@/models/route.ts"
 import type { UserSignature } from "@/models/user.ts"
 import type { VehicleSignature } from "@/models/vehicle.ts"
 
 export type GetRoutesReply = RoutePreview[]
 
-export type GetRouteReply = Route[]
+export type GetRouteReply = RouteWithOrders[]
 
 export type GetDriverRoutesReply = RoutePreview[]
 

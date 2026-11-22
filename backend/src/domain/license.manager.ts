@@ -1,7 +1,8 @@
 import type { CreateLicenseRequest, UpdateLicenseRequest } from "@/dtos/license.dto.ts"
-import type { License, PrismaClient, User } from "@/generated/prisma/client.ts"
+import type { PrismaClient, User } from "@/generated/prisma/client.ts"
 import { Err, Ok, type Result } from "@/lib/result.ts"
 import { isManager } from "@/lib/user.utils.ts"
+import type { LicenseDetailed } from "@/models/license.ts"
 import { PrismaContext } from "@/services/database/prisma_context.ts"
 import assert from "assert"
 
@@ -26,8 +27,12 @@ export class LicenseManager {
   /**
    * Retorna todos as licenças.
    */
-  public async getAll(): Promise<License[]> {
-    return await this.prisma.license.findMany()
+  public async getAll(): Promise<LicenseDetailed[]> {
+    return await this.prisma.license.findMany({
+      include: {
+        createdBy: { select: { id: true, name: true, username: true } }
+      }
+    })
   }
 
   /**
@@ -68,12 +73,9 @@ export class LicenseManager {
   }
 
   /**
-   * Deleta uma licença por pedido de `requester`.
-   * @param requester gerente ou admin.
+   * Deleta uma licença.
    */
-  public async delete(requester: User, id: string): Promise<Result<'', 'noSuchLicense' | 'unknownError'>> {
-    assert(isManager(requester))
-
+  public async delete(id: string): Promise<Result<'', 'noSuchLicense' | 'unknownError'>> {
     const { count } = await this.prisma.license.deleteMany({ where: { id } })
     if (count == 0) return Err('noSuchLicense')
 
