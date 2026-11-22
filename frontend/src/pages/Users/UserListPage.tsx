@@ -11,7 +11,7 @@ export interface UserListPageProps {
   users: User[]
   onReload: () => void
   onCreate: () => void
-  onEdit: (id: string) => void
+  onEdit: (username: string) => void
   onViewDetails: (username: string) => void
 }
 
@@ -75,10 +75,11 @@ export const UserListPage: React.FC<UserListPageProps> = ({
             onChange={(e) => setRoleFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos os Cargos' },
-              { value: 'Admin', label: 'Administrador' },
-              { value: 'Manager', label: 'Gerente' },
-              { value: 'Clerk', label: 'Atendente' },
-              { value: 'Driver', label: 'Motorista' },
+              { value: 'admin', label: 'Administrador' },
+              { value: 'manager', label: 'Gerente' },
+              { value: 'clerk', label: 'Atendente' },
+              { value: 'operator', label: 'Operador' },
+              { value: 'driver', label: 'Motorista' },
             ]}
           />
         </div>
@@ -105,7 +106,8 @@ export const UserListPage: React.FC<UserListPageProps> = ({
             </TableRow>
           ) : (
             filteredUsers.map((user) => (
-              <TableRow key={user.id}>
+              /* A key agora é o username, pois a API não fornece id */
+              <TableRow key={user.username}>
                 <TableCell>
                   <span
                     style={{
@@ -151,7 +153,8 @@ export const UserListPage: React.FC<UserListPageProps> = ({
                       size="sm"
                       icon={<Pencil size={15} />}
                       title="Editar Usuário"
-                      onClick={() => onEdit(user.id)}
+                      /* Passando o username explicitamente */
+                      onClick={() => onEdit(user.username)}
                     />
                   </div>
                 </TableCell>

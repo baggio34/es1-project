@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { Order, OrderFormData, OrderStatus } from '../../models/order.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
@@ -6,23 +6,14 @@ import { Label } from '../../components/ui/label.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
+import { useLicense } from '../../view_models/useLicense.ts'
+import { maskCpfCnpj } from '../../utils/formatters.tsx'
 
 export interface OrderFormPageProps {
   initialOrder?: Order | null
   onSave: (data: OrderFormData) => Promise<void>
   onCancel: () => void
 }
-
-const AVAILABLE_LICENSES = [
-  'Carga Perigosa',
-  'Carga Refrigerada',
-  'Carga Viva',
-  'Carga Indivisível',
-  'Produtos Químicos',
-  'Inflamáveis',
-  'Medicamentos',
-  'Alimentos Perecíveis',
-]
 
 export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   initialOrder,
@@ -33,20 +24,28 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
 
   const [description, setDescription] = useState(initialOrder ? initialOrder.description : '')
   const [clientName, setClientName] = useState(initialOrder ? initialOrder.clientName : '')
-  const [clientReg, setClientReg] = useState(initialOrder ? initialOrder.clientRegistration : '')
+  const [clientReg, setClientReg] = useState(initialOrder ? maskCpfCnpj(initialOrder.clientRegistration || '') : '')
   const [destination, setDestination] = useState(initialOrder ? initialOrder.destination : '')
   const [weight, setWeight] = useState<number | string>(initialOrder ? initialOrder.weight : '')
   const [volume, setVolume] = useState<number | string>(initialOrder ? initialOrder.volume : '')
+  const [value, setValue] = useState<number | string>(initialOrder ? initialOrder.value : '')
+  const [shipmentPrice, setShipmentPrice] = useState<number | string>(initialOrder ? initialOrder.shipmentPrice : '')
   const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
-    initialOrder && initialOrder.requiredLicenses ? initialOrder.requiredLicenses : []
+    initialOrder && initialOrder.licenses ? initialOrder.licenses : []
   )
   const [status, setStatus] = useState<OrderStatus>(initialOrder ? initialOrder.status : 'pendingApproval')
-  // motivo da rejeição – obrigatório quando status for 'rejected'
   const [reason, setReason] = useState<string>(initialOrder && (initialOrder as any).status === 'rejected' ? (initialOrder as any).reason || '' : '')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  // Integração com as licenças reais do back-end
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses } = useLicense()
+
+  useEffect(() => {
+    loadLicenses().catch(console.error)
+  }, [loadLicenses])
 
   const handleAddLicense = (license: string) => {
     if (!requiredLicenses.includes(license)) {
@@ -70,6 +69,8 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
     if (Number(volume) <= 0 || isNaN(Number(volume))) newErrors.volume = 'O volume deve ser maior que zero.'
+    if (value === '' || isNaN(Number(value)) || Number(value) < 0) newErrors.value = 'Informe o valor dos itens (zero ou mais).'
+    if (shipmentPrice === '' || isNaN(Number(shipmentPrice)) || Number(shipmentPrice) < 0) newErrors.shipmentPrice = 'Informe o preço do frete (zero ou mais).'
     if (status === 'rejected' && !reason?.trim()) newErrors.reason = 'Informe o motivo da rejeição.'
 
     if (Object.keys(newErrors).length > 0) {
@@ -79,6 +80,13 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
 
     setIsSubmitting(true)
 
+    const selectEl = document.getElementById('order-license-select') as HTMLSelectElement | null
+    const pendingLicense = selectEl?.value
+    const finalLicenses = [...requiredLicenses]
+    if (pendingLicense && !finalLicenses.includes(pendingLicense)) {
+      finalLicenses.push(pendingLicense)
+    }
+
     try {
       await onSave({
         description: description.trim(),
@@ -87,10 +95,11 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
         destination: destination.trim(),
         weight: Number(weight),
         volume: Number(volume),
-        requiredLicenses,
-        status,
-        // inclui motivo apenas se o status for rejeitado
-        ...(status === 'rejected' ? { reason: reason.trim() } : {}),
+        value: Number(value),
+        shipmentPrice: Number(shipmentPrice),
+        licenses: finalLicenses,
+        ...(isEditing ? { status } : {}),
+        ...(isEditing && status === 'rejected' ? { reason: reason.trim() } : {}),
       })
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o pedido. Tente novamente.')
@@ -186,11 +195,12 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                 <Input
                   autoComplete='off'
                   id="order-client-reg"
-                  placeholder="Ex: 111.222.333-44"
+                  placeholder="Ex: 000.000.000-00 ou 00.000.000/0000-00"
                   value={clientReg}
+                  maxLength={18}
                   disabled={isSubmitting}
                   onChange={(e) => {
-                    setClientReg(e.target.value)
+                    setClientReg(maskCpfCnpj(e.target.value))
                     if (errors.clientReg) setErrors((p) => ({ ...p, clientReg: '' }))
                   }}
                   error={errors.clientReg}
@@ -272,6 +282,56 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="order-value" required className="text-sm font-semibold text-slate-700">
+                  Valor dos Itens (R$)
+                </Label>
+                <Input
+                  autoComplete='off'
+                  id="order-value"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 12500.00"
+                  value={value}
+                  disabled={isSubmitting}
+                  onChange={(e) => {
+                    setValue(e.target.value)
+                    if (errors.value) setErrors((p) => ({ ...p, value: '' }))
+                  }}
+                  error={errors.value}
+                />
+                {errors.value && (
+                  <span className="text-xs font-medium text-red-600">{errors.value}</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="order-shipment-price" required className="text-sm font-semibold text-slate-700">
+                  Preço do Frete (R$)
+                </Label>
+                <Input
+                  autoComplete='off'
+                  id="order-shipment-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 850.00"
+                  value={shipmentPrice}
+                  disabled={isSubmitting}
+                  onChange={(e) => {
+                    setShipmentPrice(e.target.value)
+                    if (errors.shipmentPrice) setErrors((p) => ({ ...p, shipmentPrice: '' }))
+                  }}
+                  error={errors.shipmentPrice}
+                />
+                {errors.shipmentPrice && (
+                  <span className="text-xs font-medium text-red-600">{errors.shipmentPrice}</span>
+                )}
+              </div>
+            </div>
+
             {/* Licenças Requeridas */}
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
@@ -305,11 +365,17 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     backgroundColor: 'var(--color-bg-card)',
                   }}
                   defaultValue=""
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleAddLicense(e.target.value)
+                      e.target.value = ''
+                    }
+                  }}
                 >
                   <option value="" disabled>Selecione uma licença para adicionar...</option>
-                  {AVAILABLE_LICENSES.filter((l) => !requiredLicenses.includes(l)).map((l) => (
-                    <option key={l} value={l}>{l}</option>
+                  {dbLicenses.filter((l) => !requiredLicenses.includes(l.name)).map((l) => (
+                    <option key={l.slug} value={l.name}>{l.name}</option>
                   ))}
                 </select>
                 <Button
@@ -317,7 +383,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   variant="outline"
                   size="sm"
                   icon={<Plus size={14} />}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                   onClick={() => {
                     const select = document.getElementById('order-license-select') as HTMLSelectElement
                     if (select?.value) {
@@ -345,13 +411,16 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                     { value: 'pendingApproval', label: 'Pendente de Aprovação' },
                     { value: 'waitingPayment', label: 'Aguardando Pagamento' },
                     { value: 'inPreparation', label: 'Em Preparação' },
+                    { value: 'loaded', label: 'Carregado' },
                     { value: 'waitingDispatch', label: 'Aguardando Despacho' },
                     { value: 'onRoute', label: 'Em Rota' },
                     { value: 'arrived', label: 'Entregue' },
+                    { value: 'accident', label: 'Acidente' },
+                    { value: 'resolvedAccident', label: 'Acidente Resolvido' },
                     { value: 'rejected', label: 'Rejeitado' },
+                    { value: 'cancelled', label: 'Cancelado' },
                   ]}
                 />
-                {/* Campo de motivo, exibido apenas quando status = 'rejected' */}
                 {status === 'rejected' && (
                   <div className="flex flex-col gap-2 mt-4">
                     <Label htmlFor="order-reason" required className="text-sm font-semibold text-slate-700">

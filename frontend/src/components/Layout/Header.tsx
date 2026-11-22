@@ -8,14 +8,22 @@ export interface HeaderProps {
 }
 
 const roleNames: Record<string, string> = {
+  admin: 'Administrador',
   Admin: 'Administrador',
+  manager: 'Gerente de Logística',
   Manager: 'Gerente de Logística',
+  operator: 'Operador de Logística',
+  Operator: 'Operador de Logística',
+  clerk: 'Atendente',
   Clerk: 'Atendente',
+  driver: 'Motorista',
   Driver: 'Motorista',
 }
 
 export const Header: React.FC<HeaderProps> = ({ domainTitle, pageTitle }) => {
   const { user, logout } = useAuth()
+
+  const formattedRole = user?.role ? (roleNames[user.role] || user.role) : 'Visitante'
 
   return (
     <header className="app-header">
@@ -31,43 +39,32 @@ export const Header: React.FC<HeaderProps> = ({ domainTitle, pageTitle }) => {
         )}
       </div>
 
-      <div className="header-user">
+      <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <div className="user-info" style={{ textAlign: 'right' }}>
-          <span className="user-name">{user?.name || 'Usuário'}</span>
-          <span className="user-role">{user ? (roleNames[user.role] || user.role) : 'Visitante'}</span>
+          <span className="user-name">{user?.name || 'Utilizador'}</span>
+          <span className="user-role">{formattedRole}</span>
         </div>
-        <div className="user-avatar" title={user?.name || 'Usuário'}>
+        <div className="user-avatar" title={user?.name}>
           <User size={18} />
         </div>
-        {logout && (
-          <button
-            onClick={logout}
-            title="Sair do sistema"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0.4rem',
-              borderRadius: '0.375rem',
-              color: 'var(--color-text-secondary)',
-              transition: 'background-color 0.2s, color 0.2s',
-              marginLeft: '0.25rem',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#fee2e2'
-              e.currentTarget.style.color = '#dc2626'
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent'
-              e.currentTarget.style.color = 'var(--color-text-secondary)'
-            }}
-          >
-            <LogOut size={18} />
-          </button>
-        )}
+        
+        {/* Botão de Sair adicionado para facilitar os testes com outros cargos */}
+        <button 
+          onClick={logout}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            color: 'var(--color-text-secondary)',
+            padding: '0.5rem',
+            marginLeft: '0.5rem'
+          }}
+          title="Sair do Sistema"
+        >
+          <LogOut size={18} />
+        </button>
       </div>
     </header>
   )

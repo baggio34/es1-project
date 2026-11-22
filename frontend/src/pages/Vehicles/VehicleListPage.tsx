@@ -7,9 +7,12 @@ import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface VehicleListPageProps {
   vehicles: Vehicle[]
+  routes?: any[]
+  drivers?: any[]
   onViewDetails: (id: string) => void
   onEdit: (id: string) => void
   onCreate: () => void
@@ -19,12 +22,18 @@ export interface VehicleListPageProps {
 
 export const VehicleListPage: React.FC<VehicleListPageProps> = ({
   vehicles,
+  routes,
+  drivers,
   onViewDetails,
   onEdit,
   onCreate,
   onDelete,
   onReload,
 }) => {
+  // Puxa o utilizador atual e define se tem permissão de edição
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null)
@@ -50,9 +59,12 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          <Button icon={<Plus size={16} />} onClick={onCreate}>
-            Novo Veículo
-          </Button>
+          {/* Oculta a criação de novos veículos para operadores */}
+          {canEdit && (
+            <Button icon={<Plus size={16} />} onClick={onCreate}>
+              Novo Veículo
+            </Button>
+          )}
         </div>
       </div>
 
@@ -78,7 +90,9 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             options={[
               { value: 'all', label: 'Todos os Status' },
               { value: 'free', label: 'Disponível' },
+              { value: 'waitingOperatorOrder', label: 'Em Montagem de Rota' },
               { value: 'waitingDispatch', label: 'Aguardando Despacho' },
+              { value: 'readyToDispatch', label: 'Aguardando Saída' },
               { value: 'onRoute', label: 'Em Rota' },
             ]}
           />
@@ -109,10 +123,12 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             </TableRow>
           ) : (
             filteredVehicles.map((vehicle) => {
-              const hasDriver = 'driverId' in vehicle && vehicle.driverId
+              const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
+              const driver = drivers?.find(d => d.username === activeRoute?.driverId)
+              const hasDriver = !!driver
 
               return (
-                <TableRow key={vehicle.id}>
+                <TableRow key={vehicle.plate}>
                   <TableCell style={{ fontWeight: 600 }}>{vehicle.model}</TableCell>
                   <TableCell>
                     <span
@@ -134,8 +150,8 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                   <TableCell>{getVehicleStatusBadge(vehicle.status)}</TableCell>
                   <TableCell>
                     {hasDriver ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                        ID {vehicle.driverId.slice(0, 8)}...
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
+                        @{driver.username}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)' }}>Nenhum</span>
@@ -148,22 +164,27 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                         size="sm"
                         icon={<Eye size={15} />}
                         title="Ver Detalhes"
-                        onClick={() => onViewDetails(vehicle.id)}
+                        onClick={() => onViewDetails(vehicle.plate)}
                       />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Pencil size={15} />}
-                        title="Editar Veículo"
-                        onClick={() => onEdit(vehicle.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                        title="Excluir Veículo"
-                        onClick={() => setVehicleToDelete(vehicle)}
-                      />
+                      {/* Oculta as opções de edição e exclusão para operadores logísticos */}
+                      {canEdit && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Pencil size={15} />}
+                            title="Editar Veículo"
+                            onClick={() => onEdit(vehicle.plate)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Trash2 size={15} color="var(--color-danger-button)" />}
+                            title="Excluir Veículo"
+                            onClick={() => setVehicleToDelete(vehicle)}
+                          />
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -182,7 +203,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
         confirmVariant="destructive"
         onConfirm={() => {
           if (vehicleToDelete) {
-            onDelete(vehicleToDelete.id)
+            onDelete(vehicleToDelete.plate)
             setVehicleToDelete(null)
           }
         }}

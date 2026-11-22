@@ -1,40 +1,49 @@
 import { apiFetch } from './client'
-import type { Order, OrderFormData } from '../models/order'
+import type { 
+  OrderCreationPayload, OrderGetReply, OrdersGetAllReply, 
+  OrderRejectionPayload, OrderCancellationPayload, OrderLoadingPayload 
+} from '../models/order'
 
 export const orderApi = {
-  /**
-   * Busca a lista completa de pedidos.
-   */
-  getAll: () => apiFetch<Order[]>('/orders'),
+  create: (data: OrderCreationPayload) => 
+    apiFetch<string>('/orders', { method: 'POST', body: JSON.stringify(data) }),
+    
+  getAll: () => 
+    apiFetch<OrdersGetAllReply>('/orders'),
+    
+  getById: (id: number | string) => 
+    apiFetch<OrderGetReply>(`/orders/${id}`),
 
-  /**
-   * Busca os detalhes de um pedido por ID.
-   */
-  getById: (id: string) => apiFetch<Order>(`/orders/${id}`),
+  patch: (id: number | string, data: any) => 
+    apiFetch<string>(`/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    
+  approve: (id: number | string) => 
+    apiFetch<string>(`/orders/${id}/approve`, { method: 'POST' }),
+    
+  reject: (id: number | string, data: OrderRejectionPayload) => 
+    apiFetch<string>(`/orders/${id}/reject`, { method: 'POST', body: JSON.stringify(data) }),
+    
+  confirmPayment: (id: number | string) => 
+    apiFetch<string>(`/orders/${id}/confirm-payment`, { method: 'POST' }),
+    
+  cancel: (id: number | string, data: OrderCancellationPayload) => 
+    apiFetch<string>(`/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify(data) }),
+    
+  load: (id: number | string, data: OrderLoadingPayload) => 
+    apiFetch<string>(`/orders/${id}/load`, { method: 'POST', body: JSON.stringify(data) }),
+    
+  unload: (id: number | string) => 
+    apiFetch<string>(`/orders/${id}/unload`, { method: 'POST' }),
 
-  /**
-   * Cadastra um novo pedido.
-   */
-  create: (data: OrderFormData) =>
-    apiFetch<Order>('/orders', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  reportAccident: (id: number | string, data: { accidentMessage: string }) => 
+    apiFetch<string>(`/orders/${id}/report-accident`, { method: 'POST', body: JSON.stringify(data) }),
 
-  /**
-   * Atualiza um pedido existente.
-   */
-  update: (id: string, data: OrderFormData) =>
-    apiFetch<Order>(`/orders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  resolveAccident: (id: number | string, data: { resolutionMessage: string }) => 
+    apiFetch<string>(`/orders/${id}/resolve-accident`, { method: 'POST', body: JSON.stringify(data) }),
 
-  /**
-   * Remove um pedido do sistema.
-   */
-  delete: (id: string) =>
-    apiFetch<void>(`/orders/${id}`, {
-      method: 'DELETE',
-    }),
+  confirmArrival: (id: number | string) => 
+    apiFetch<string>(`/orders/${id}/confirm-arrival`, { method: 'POST' }),
+
+  getSuggestedRoutes: (id: number | string) => 
+    apiFetch<any>(`/orders/${id}/suggested-routes`),
 }

@@ -3,11 +3,14 @@ import type { Driver } from '../../models/driver.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
+import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, User, Truck, Package, Map } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverDetailPageProps {
   driver: Driver
+  routes?: any[]
+  vehicles?: any[]
   onBack: () => void
   onEdit: (id: string) => void
   onViewRoute?: (routeId: string) => void
@@ -15,13 +18,24 @@ export interface DriverDetailPageProps {
 
 export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
   driver,
+  routes,
+  vehicles,
   onBack,
   onEdit,
   onViewRoute,
 }) => {
-  const hasVehicle = 'vehicleId' in driver && driver.vehicleId
-  const orderIds = 'orderIds' in driver ? driver.orderIds : []
-  const routeId = 'routeId' in driver ? driver.routeId : undefined
+  const d = driver as any
+  
+  const activeRoute = d.status !== 'free' ? routes?.find(r => r.id === d.routeId && r.status !== 'completed') : undefined
+  
+  const vehicle = activeRoute?.vehicleId 
+    ? vehicles?.find(v => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) 
+    : undefined
+  
+  const hasVehicle = !!vehicle
+  const orderIds = activeRoute?.orders || activeRoute?.orderIds || []
+  const routeId = activeRoute?.id
+  const licenses = d.licenses || []
 
   return (
     <div>
@@ -31,12 +45,12 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
             Voltar à Lista
           </Button>
           <div>
-            <h1 className="page-title">{driver.name}</h1>
-            <p className="page-description">Identificador: {driver.id}</p>
+            <h1 className="page-title">{d.name}</h1>
+            <p className="page-description">Identificador: @{d.username}</p>
           </div>
         </div>
         <div className="page-actions">
-          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(driver.id)}>
+          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(d.username)}>
             Editar Cadastro
           </Button>
         </div>
@@ -49,28 +63,38 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
               <User size={18} color="var(--color-primary)" />
               <CardTitle>Dados Pessoais</CardTitle>
             </div>
-            {getDriverStatusBadge(driver.status)}
+            {getDriverStatusBadge(d.status)}
           </CardHeader>
           <CardContent>
             <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="detail-item">
                 <span className="detail-label">Nome Completo</span>
-                <span className="detail-value">{driver.name}</span>
+                <span className="detail-value">{d.name}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">CPF</span>
-                <span className="detail-value detail-value-mono">{formatReg(driver.cpf)}</span>
+                <span className="detail-value detail-value-mono">{formatReg(d.cpf)}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Status Operacional</span>
-                <span className="detail-value">{getDriverStatusBadge(driver.status)}</span>
+                <span className="detail-value">{getDriverStatusBadge(d.status)}</span>
               </div>
               <div className="detail-item">
-                <span className="detail-label">Código UUID</span>
+                <span className="detail-label">Usuário</span>
                 <span className="detail-value detail-value-mono" style={{ fontSize: '0.8125rem' }}>
-                  {driver.id}
+                  @{d.username}
                 </span>
               </div>
+              {licenses.length > 0 && (
+                <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                  <span className="detail-label">Licenças Especiais (CNH)</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
+                    {licenses.map((lic: string) => (
+                      <Badge key={lic} variant="secondary">{lic}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -93,12 +117,12 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
                 <div className="detail-item">
                   <span className="detail-label">Veículo Designado</span>
                   <span className="detail-value detail-value-mono">
-                    {driver.vehicleId}
+                    {vehicle?.plate?.toUpperCase()}
                   </span>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Tipo de Carga</span>
-                  <span className="detail-value">Transporte Rodoviário</span>
+                  <span className="detail-label">Modelo</span>
+                  <span className="detail-value">{vehicle?.model}</span>
                 </div>
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Total de Pedidos em Trânsito</span>
@@ -135,18 +159,18 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Identificador do Pedido (UUID)</TableHead>
+                  <TableHead>Identificador do Pedido</TableHead>
                   <TableHead>Status da Carga</TableHead>
                   <TableHead>Prioridade</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderIds.map((orderId) => (
+                {orderIds.map((orderId: string | number) => (
                   <TableRow key={orderId}>
-                    <TableCell className="detail-value-mono">{orderId}</TableCell>
+                    <TableCell className="detail-value-mono">#{orderId}</TableCell>
                     <TableCell>
                       <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                        {driver.status === 'onRoute' ? 'Em Transporte' : 'Aguardando Despacho'}
+                        {d.status === 'onRoute' ? 'Em Transporte' : 'Aguardando Despacho'}
                       </span>
                     </TableCell>
                     <TableCell>Padrão Corporativo</TableCell>

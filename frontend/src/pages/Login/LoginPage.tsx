@@ -120,7 +120,7 @@ export const LoginPage: React.FC = () => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="ex: admin, admin2 ou carlos.mot"
+                placeholder="ex: admin, admin2 ou motorista1"
                 required
                 style={{ 
                   height: '3rem', 
@@ -191,10 +191,11 @@ export const LoginPage: React.FC = () => {
             </Button>
           </form>
 
-          <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', fontSize: '0.8125rem', color: '#64748b', textAlign: 'center' }}>
-            <strong>Usuários de Teste (Mock):</strong><br/>
-            admin, admin2 (Admin) | gerente.log (Manager) <br/>
-            joao.atend (Clerk) | carlos.mot (Driver)
+          <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', fontSize: '0.8125rem', color: '#64748b', textAlign: 'center', lineHeight: 1.5 }}>
+            <strong>Credenciais de Acesso:</strong><br/>
+            <strong>Admins:</strong> <code>admin</code> ou <code>admin2</code> (senha: <code>admin</code> ou <code>admin123</code>)<br/>
+            <strong>Operador:</strong> <code>operador</code> (senha: <code>Teste@123</code>)<br/>
+            <strong>Motorista:</strong> <code>driver</code> (senha: <code>teste@123</code>)
           </div>
 
           <div style={{ marginTop: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>

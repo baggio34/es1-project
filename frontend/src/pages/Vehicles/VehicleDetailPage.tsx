@@ -6,9 +6,12 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, Truck, Box, Shield, Map } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface VehicleDetailPageProps {
   vehicle: Vehicle
+  routes?: any[]
+  drivers?: any[]
   onBack: () => void
   onEdit: (id: string) => void
   onViewRoute?: (routeId: string) => void
@@ -16,15 +19,24 @@ export interface VehicleDetailPageProps {
 
 export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   vehicle,
+  routes,
+  drivers,
   onBack,
   onEdit,
   onViewRoute,
 }) => {
-  const hasDriver = 'driverId' in vehicle && vehicle.driverId
-  const driverName = 'driverName' in vehicle ? vehicle.driverName : undefined
-  const orderIds = 'orderIds' in vehicle ? vehicle.orderIds : []
-  const routeId = 'routeId' in vehicle ? vehicle.routeId : undefined
-  const requiredLicenses = vehicle.requiredLicenses || []
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
+  // Cruzamento de dados blindado (Ignora se estiver livre ou se a rota já foi concluída)
+  const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
+  const driver = drivers?.find(d => d.username === activeRoute?.driverId)
+  
+  const hasDriver = !!driver
+  const driverName = driver?.name
+  const orderIds = activeRoute?.orders || activeRoute?.orderIds || []
+  const routeId = activeRoute?.id
+  const requiredLicenses = (vehicle as any).licenses || []
 
   return (
     <div>
@@ -37,23 +49,18 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
             <h1 className="page-title">{vehicle.model}</h1>
             <p className="page-description">
               Placa:{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 600,
-                  color: 'var(--color-primary)',
-                }}
-              >
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-primary)' }}>
                 {vehicle.plate.toUpperCase()}
-              </span>{' '}
-              • UUID: {vehicle.id}
+              </span>
             </p>
           </div>
         </div>
         <div className="page-actions">
-          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.id)}>
-            Editar Ficha Técnica
-          </Button>
+          {canEdit && (
+            <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.plate)}>
+              Editar Ficha Técnica
+            </Button>
+          )}
         </div>
       </div>
 
@@ -96,7 +103,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Licenças Requeridas</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                    {requiredLicenses.map((lic) => (
+                    {requiredLicenses.map((lic: string) => (
                       <Badge key={lic} variant="secondary">{lic}</Badge>
                     ))}
                   </div>
@@ -127,7 +134,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                     {driverName || 'Nome indisponível'}
                   </span>
                   <span className="detail-value detail-value-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                    ID: {vehicle.driverId}
+                    @{driver?.username}
                   </span>
                 </div>
                 <div className="detail-item">
@@ -136,23 +143,8 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </div>
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Capacidade Ocupada</span>
-                  <div
-                    style={{
-                      height: '8px',
-                      width: '100%',
-                      backgroundColor: 'var(--color-bg-subtle)',
-                      borderRadius: 'var(--radius-full)',
-                      marginTop: '0.5rem',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '65%',
-                        height: '100%',
-                        backgroundColor: 'var(--color-primary)',
-                      }}
-                    />
+                  <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)', marginTop: '0.5rem', overflow: 'hidden' }}>
+                    <div style={{ width: '65%', height: '100%', backgroundColor: 'var(--color-primary)' }} />
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem', display: 'inline-block' }}>
                     Aproximadamente 65% da capacidade de peso alocada.
@@ -193,9 +185,9 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orderIds.map((orderId) => (
+                {orderIds.map((orderId: string | number) => (
                   <TableRow key={orderId}>
-                    <TableCell className="detail-value-mono">{orderId}</TableCell>
+                    <TableCell className="detail-value-mono">#{orderId}</TableCell>
                     <TableCell>
                       <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
                         {vehicle.status === 'onRoute' ? 'Em Deslocamento' : 'Carregado no Pátio'}

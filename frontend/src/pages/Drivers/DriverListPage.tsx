@@ -8,9 +8,12 @@ import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface DriverListPageProps {
   drivers: Driver[]
+  routes?: any[]
+  vehicles?: any[]
   onViewDetails: (id: string) => void
   onEdit: (id: string) => void
   onCreate: () => void
@@ -20,21 +23,27 @@ export interface DriverListPageProps {
 
 export const DriverListPage: React.FC<DriverListPageProps> = ({
   drivers,
+  routes,
+  vehicles,
   onViewDetails,
   onEdit,
   onCreate,
   onDelete,
   onReload,
 }) => {
+  const { user } = useAuth()
+  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null)
 
   const filteredDrivers = drivers.filter((driver) => {
+    const d = driver as any
     const matchesSearch =
-      driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.cpf.includes(searchTerm)
-    const matchesStatus = statusFilter === 'all' || driver.status === statusFilter
+      (d.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (d.cpf || '').includes(searchTerm)
+    const matchesStatus = statusFilter === 'all' || d.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -51,9 +60,11 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          <Button icon={<Plus size={16} />} onClick={onCreate}>
-            Novo Motorista
-          </Button>
+          {canEdit && (
+            <Button icon={<Plus size={16} />} onClick={onCreate}>
+              Novo Motorista
+            </Button>
+          )}
         </div>
       </div>
 
@@ -79,7 +90,9 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
             options={[
               { value: 'all', label: 'Todos os Status' },
               { value: 'free', label: 'Disponível' },
+              { value: 'waitingOperatorOrder', label: 'Em Montagem de Rota' },
               { value: 'waitingDispatch', label: 'Aguardando Despacho' },
+              { value: 'readyToDispatch', label: 'Aguardando Saída' },
               { value: 'onRoute', label: 'Em Rota' },
             ]}
           />
@@ -108,18 +121,26 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
             </TableRow>
           ) : (
             filteredDrivers.map((driver) => {
-              const hasVehicle = 'vehicleId' in driver && driver.vehicleId
-              const orderCount = 'orderIds' in driver ? driver.orderIds.length : 0
+              const d = driver as any
+              
+              const activeRoute = d.status !== 'free' ? routes?.find(r => r.id === d.routeId && r.status !== 'completed') : undefined
+              
+              const vehicle = activeRoute?.vehicleId 
+                ? vehicles?.find(v => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) 
+                : undefined
+              
+              const hasVehicle = !!vehicle
+              const orderCount = activeRoute?.orders?.length || activeRoute?.orderIds?.length || 0
 
               return (
-                <TableRow key={driver.id}>
-                  <TableCell style={{ fontWeight: 600 }}>{driver.name}</TableCell>
-                  <TableCell className="detail-value-mono">{formatReg(driver.cpf)}</TableCell>
-                  <TableCell>{getDriverStatusBadge(driver.status)}</TableCell>
+                <TableRow key={d.username || d.id}>
+                  <TableCell style={{ fontWeight: 600 }}>{d.name}</TableCell>
+                  <TableCell className="detail-value-mono">{formatReg(d.cpf)}</TableCell>
+                  <TableCell>{getDriverStatusBadge(d.status)}</TableCell>
                   <TableCell>
                     {hasVehicle ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                        ID {driver.vehicleId.slice(0, 8)}...
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
+                        {vehicle?.plate?.toUpperCase()}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)' }}>Nenhum</span>
@@ -139,22 +160,26 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
                         size="sm"
                         icon={<Eye size={15} />}
                         title="Ver Detalhes"
-                        onClick={() => onViewDetails(driver.id)}
+                        onClick={() => onViewDetails(d.username || d.id)}
                       />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Pencil size={15} />}
-                        title="Editar Motorista"
-                        onClick={() => onEdit(driver.id)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                        title="Excluir Motorista"
-                        onClick={() => setDriverToDelete(driver)}
-                      />
+                      {canEdit && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Pencil size={15} />}
+                            title="Editar Motorista"
+                            onClick={() => onEdit(d.username || d.id)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Trash2 size={15} color="var(--color-danger-button)" />}
+                            title="Excluir Motorista"
+                            onClick={() => setDriverToDelete(driver)}
+                          />
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -173,14 +198,15 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
         confirmVariant="destructive"
         onConfirm={() => {
           if (driverToDelete) {
-            onDelete(driverToDelete.id)
+            const d = driverToDelete as any
+            onDelete(d.username || d.id)
             setDriverToDelete(null)
           }
         }}
       >
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
           Deseja realmente excluir o motorista{' '}
-          <strong>{driverToDelete?.name}</strong> (CPF: {driverToDelete ? formatReg(driverToDelete.cpf) : ''})?
+          <strong>{(driverToDelete as any)?.name}</strong> (CPF: {driverToDelete ? formatReg((driverToDelete as any).cpf) : ''})?
         </p>
       </Modal>
     </div>

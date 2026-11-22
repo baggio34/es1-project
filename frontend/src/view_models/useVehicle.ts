@@ -1,83 +1,25 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { vehicleApi } from '../api/vehicleApi'
-import { ApiError } from '../api/client'
-import type { Vehicle, VehicleFormData } from '../models/vehicle'
+import type { Vehicle, VehicleRegistrationPayload } from '../models/vehicle'
 
 export function useVehicle() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  // Função para carregar a lista de veículos com suporte a Array ou Objeto do backend[cite: 4]
   const loadVehicles = useCallback(async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError(null)
       const data = await vehicleApi.getAll()
-
-      let vehicleList: Vehicle[] = []
-      if (Array.isArray(data)) {
-        vehicleList = data
-      } else if (data && typeof data === 'object') {
-        vehicleList = Object.values(data)
-      }
-
-      setVehicles(vehicleList)
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError('Erro inesperado ao carregar veículos.')
-      }
+      setVehicles(data)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    loadVehicles()
-  }, [loadVehicles])
-
-  const saveVehicle = async (data: VehicleFormData, selectedId?: string | null) => {
-    try {
-      setError(null)
-      if (selectedId) {
-        await vehicleApi.update(selectedId, data)
-      } else {
-        await vehicleApi.create(data)
-      }
-      await loadVehicles()
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError('Erro ao salvar veículo.')
-      }
-      throw err
-    }
+  const registerVehicle = async (data: VehicleRegistrationPayload) => {
+    await vehicleApi.register(data)
+    await loadVehicles()
   }
 
-  const deleteVehicle = async (id: string) => {
-    try {
-      setError(null)
-      await vehicleApi.delete(id)
-      await loadVehicles()
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError('Erro ao deletar veículo.')
-      }
-      throw err
-    }
-  }
-
-  return {
-    vehicles,
-    loading,
-    error,
-    saveVehicle,
-    deleteVehicle,
-    reload: loadVehicles,
-  }
+  return { vehicles, loading, loadVehicles, registerVehicle, api: vehicleApi }
 }

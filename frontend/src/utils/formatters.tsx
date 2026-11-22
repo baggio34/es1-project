@@ -16,6 +16,20 @@ export const formatReg = (reg: string): string => {
   return reg
 }
 
+export const maskCpfCnpj = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 14)
+  if (digits.length <= 11) {
+    if (digits.length <= 3) return digits
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
+  }
+  if (digits.length <= 12) {
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
+  }
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
+}
+
 export const formatCurrency = (val: number): string => {
   return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -54,6 +68,8 @@ export const getOrderStatusBadge = (status: OrderStatus): React.ReactElement => 
       return <Badge variant="secondary">Aguardando Pagamento</Badge>
     case 'inPreparation':
       return <Badge variant="secondary">Em Preparação</Badge>
+    case 'loaded':
+      return <Badge variant="primary">Carregado</Badge>
     case 'waitingDispatch':
       return <Badge variant="primary">Aguardando Despacho</Badge>
     case 'onRoute':
@@ -66,6 +82,8 @@ export const getOrderStatusBadge = (status: OrderStatus): React.ReactElement => 
       return <Badge variant="danger">Acidente Reportado</Badge>
     case 'resolvedAccident':
       return <Badge variant="success">Acidente Resolvido</Badge>
+    case 'cancelled':
+      return <Badge variant="danger">Cancelado</Badge>
     default:
       return <Badge variant="secondary">{status}</Badge>
   }

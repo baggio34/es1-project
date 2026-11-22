@@ -24,6 +24,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ counts }) => {
   else if (path.startsWith('/routes')) domainTitle = 'Gerência de Rotas'
   else if (path.startsWith('/driver-routes')) domainTitle = 'Painel do Motorista'
   else if (path.startsWith('/users')) domainTitle = 'Gerência de Usuários'
+  else if (path.startsWith('/licenses')) domainTitle = 'Gerência de Licenças'
 
   if (path.endsWith('/create')) pageTitle = 'Novo Cadastro'
   else if (path.endsWith('/edit')) pageTitle = 'Edição de Cadastro'
