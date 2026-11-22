@@ -1,58 +1,44 @@
-import fastify from 'fastify'
-import fastifySwagger from '@fastify/swagger'
-import fastifySwaggerUi from '@fastify/swagger-ui'
-import cors from '@fastify/cors'
-import userRouter from './endpoints/user.endpoints.ts'
-import vehicleRouter from './endpoints/vehicle.endpoints.ts'
-import licenseRouter from './endpoints/license.endpoints.ts'
-import orderRouter from './endpoints/order.endpoints.ts'
-import driverRouter from './endpoints/driver.endpoints.ts'
-import routeRouter from './endpoints/route.endpoints.ts'
+import "dotenv/config"
+import express from 'express'
+import cors from 'cors'
+import { PrismaContext } from './services/database/prisma_context.ts'
+import { PrismaClient } from './generated/prisma/client.ts'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { authenticator } from './services/auth/authenticator.ts'
+import { userRouter } from './endpoints/user.endpoints.ts'
+import { loginRouter } from './endpoints/auth.endpoints.ts'
+import { vehicleRouter } from "./endpoints/vehicle.endpoints.ts"
+import { licenseRouter } from "./endpoints/license.endpoints.ts"
+import { driverRouter } from "./endpoints/driver.endpoints.ts"
+import { orderRouter } from "./endpoints/order.endpoints.ts"
+import { routeRouter } from "./endpoints/route.endpoints.ts"
 
-const app = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
-  }
-})
+const app = express()
 
-await app.register(cors, {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-})
+app.use(cors())
+app.use(express.json())
 
-await app.register(fastifySwagger, {
-  openapi: {
-    info: {
-      title: 'Backend',
-      version: '2.0.0'
-    },
-  }
-})
+// Inicializar a conexão com o banco de dados.
+PrismaContext.setClient(
+  new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env['DATABASE_URL'] }),
+  })
+)
 
-await app.register(fastifySwaggerUi, {
-  routePrefix: '/docs',
-  uiConfig: {
-    docExpansion: 'list',
-    deepLinking: false
-  }
-})
+// Endpoint para autenticação.
+app.use('/login', loginRouter)
 
-await app.register(userRouter)
-await app.register(vehicleRouter)
-await app.register(licenseRouter)
-await app.register(orderRouter)
-await app.register(driverRouter)
-await app.register(routeRouter)
+// Endpoints protegidos por autenticação.
+const apiRouter = express.Router()
+  .use(authenticator)
+  .use('/users', userRouter)
+  .use('/vehicles', vehicleRouter)
+  .use('/licenses', licenseRouter)
+  .use('/drivers', driverRouter)
+  .use('/orders', orderRouter)
+  .use('/routes', routeRouter)
 
-app.listen({ port: 3000 }, (err, _address) => {
-  if (err) {
-    app.log.error(err)
-    process.exit(1)
-  }
-})
+app.use('/api', apiRouter)
+
+
+app.listen(3000)

@@ -1,51 +1,84 @@
-import { type Result, Err, Ok } from "@/lib/result.ts";
-import { slugify } from "@/lib/string.utils.ts";
-import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_operations.ts";
+import type { CreateLicenseRequest, UpdateLicenseRequest } from "@/dtos/license.dto.ts"
+import type { PrismaClient, User } from "@/generated/prisma/client.ts"
+import { Err, Ok, type Result } from "@/lib/result.ts"
+import { isManager } from "@/lib/user.utils.ts"
+import type { LicenseDetailed } from "@/models/license.ts"
+import { PrismaContext } from "@/services/database/prisma_context.ts"
+import assert from "assert"
 
-export type License = {
-  name: string,
-  slug: string,
-}
+/*
+ * Classe que gerencia as licenças do sistema.
+ */
+export class LicenseManager {
+  private static instance: LicenseManager | null
+  private prisma: PrismaClient
+  
+  private constructor() {
+    this.prisma = PrismaContext.getClient()
+  }
 
-class LicenseManager {
-  licenses = new Map<string, string>()
-
-  LicenseManager() {
-    const result = loadObjectFromFile<Record<string, string>>('./data/licenses.json')
-    if (result.isOk) {
-      this.licenses = new Map(Object.entries(result.ok))
-    } else {
-      console.error(`Error loading licenses: '${result.err}'\nStarting with new data.`)
+  public static getInstance(): LicenseManager {
+    if (!this.instance) {
+      this.instance = new LicenseManager()
     }
+    return this.instance
   }
 
-  saveLicenses(): Result<'saved', string> {
-    const result = saveObjectToFile('./data/licenses.json', this.licenses.entries())
-    if (result.isErr) {
-      console.error(result.err)
-      return result
-    }
-    return Ok('saved')
+  /**
+   * Retorna todos as licenças.
+   */
+  public async getAll(): Promise<LicenseDetailed[]> {
+    return await this.prisma.license.findMany({
+      include: {
+        createdBy: { select: { id: true, name: true, username: true } }
+      }
+    })
   }
 
-  public getAll(): License[] {
-    return this.licenses.entries().map(([slug, name]) => ({ slug, name }) ).toArray()
+  /**
+   * Cria uma nova licença a pedido de [requester].
+   * @param O gerente ou admin.
+   */
+  public async create(creator: User, data: CreateLicenseRequest): Promise<Result<'', 'unknownError'>> {
+    assert(isManager(creator))
+
+    await this.prisma.license.create({
+      data: {
+        ...data,
+        createdBy: {
+          connect: { id: creator.id }
+        },
+      }
+    })
+
+    return Ok('')
   }
 
-  public add(name: string): Result<string, 'alreadyExists'> {
-    const slug = slugify(name)
-    if (this.licenses.has(slug)) return Err('alreadyExists')
-    this.licenses.set(slug, name)
-    this.saveLicenses()
-    return Ok(slug)
+  /**
+   * Altera o nome de uma licença por pedido de `requester`.
+   * @param requester gerente ou admin.
+   */
+  public async update(requester: User, id: string, { name }: UpdateLicenseRequest): Promise<Result<'', 'noSuchLicense' | 'unknownError'>> {
+    assert(isManager(requester))
+
+    const license = await this.prisma.license.findFirst({ where: { id } })
+    if (!license) return Err('noSuchLicense')
+
+    await this.prisma.license.update({
+      where: { id },
+      data: { name },
+    })
+
+    return Ok('')
   }
 
-  public delete(slug: string): Result<'deleted', 'noSuchLicense'> {
-    if (!this.licenses.has(slug)) return Err('noSuchLicense')
-    this.licenses.delete(slug)
-    this.saveLicenses()
-    return Ok('deleted')
+  /**
+   * Deleta uma licença.
+   */
+  public async delete(id: string): Promise<Result<'', 'noSuchLicense' | 'unknownError'>> {
+    const { count } = await this.prisma.license.deleteMany({ where: { id } })
+    if (count == 0) return Err('noSuchLicense')
+
+    return Ok('')
   }
 }
-
-export const licenseManager = new LicenseManager()

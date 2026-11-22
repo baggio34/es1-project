@@ -1,108 +1,155 @@
-import type { VehiclePatchPayload, VehicleRegistrationPayload } from "@/endpoints/dtos/vehicle.dto.ts";
-import type { Vehicle } from "@/models/vehicle.ts";
-import { userManager } from "@/domain/user.manager.ts";
-import { isManager } from "@/lib/user.utils.ts";
+import type { CreateVehicleRequest, UpdateVehicleRequest } from "@/dtos/vehicle.dto.ts"
+import type { PrismaClient, User, Vehicle } from "@/generated/prisma/client.ts";
+import { serializeDates } from "@/lib/date.utils.ts";
 import { Err, Ok, type Result } from "@/lib/result.ts";
-import type { TransportationStatus } from "@/models/driver.ts";
-import { loadObjectFromFile, saveObjectToFile } from "@/services/database/file_operations.ts";
+import { isManager } from "@/lib/user.utils.ts";
+import type { VehicleDetailed, VehiclePreview } from "@/models/vehicle.ts";
+import { PrismaContext } from "@/services/database/prisma_context.ts";
+import assert from "assert";
 
-class VehicleManager {
-  vehicles = new Map<string, Vehicle>
-
-  VehicleManager() {
-    const result = loadObjectFromFile<Record<number, Vehicle>>('./data/vehicles.json')
-    if (result.isOk) {
-      this.vehicles = new Map(Object.entries(result.ok))
-    } else {
-      console.error(`Error loading vehicles: '${result.err}'\nStarting with new data.`)
-    }
+/**
+ * Gerencia os veículos do sistema.
+ */
+export class VehicleManager {
+  private static instance: VehicleManager | null
+  private prisma: PrismaClient
+  
+  private constructor() {
+    this.prisma = PrismaContext.getClient()
   }
 
-  saveVehicles(): Result<'saved', string> {
-    const result = saveObjectToFile('./data/vehicles.json', Object.fromEntries(this.vehicles.entries()))
-    if (result.isErr) {
-      console.error(result.err)
-      return result
+  public static getInstance(): VehicleManager {
+    if (!this.instance) {
+      this.instance = new VehicleManager()
     }
-    return Ok('saved')
+    return this.instance
   }
 
   /**
    * Retorna um veículo dado sua placa.
    */
-  public get(plate: string): Vehicle | undefined {
-    return this.vehicles.get(plate)
+  public async get(plate: string): Promise<VehicleDetailed | null> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { plate },
+      omit: { createdById: true, routeId: true },
+      include: {
+        licenses: {
+          select: { license: { select: { id: true, name: true } } }
+        },
+        createdBy: {
+          select: { username: true, name: true, id: true, }
+        },
+        route: {
+          select: {
+            id: true,
+            vehicle: { select: { id: true, color: true, model: true, plate: true } },
+            driver: { select: { id: true, name: true, username: true } },
+            status: true,
+          }
+        }
+      }
+    })
+
+    if (!vehicle) return null
+    return {
+      ...serializeDates(vehicle),
+      licenses: vehicle.licenses.map(l => l.license),
+    } as VehicleDetailed
+  }
+
+  public async getActive(plate: string): Promise<Vehicle | null> {
+    return await this.prisma.vehicle.findFirst({
+      where: { plate, isActive: true }
+    })
   }
 
   /**
-   * Retorna um veículo dado sua placa somente se ele estiver ativo.
+   * Retorna todos os veículos.
    */
-  public getActive(plate: string): Vehicle | undefined {
-    const vehicle = this.vehicles.get(plate)
-    if (vehicle?.condition == 'active') return vehicle
-    return undefined
-  }
-
-  /**
-   * Retorna todos os veículos. Também permite filtrar pelo `status`.
-   */
-  public getAll(status?: string): Vehicle[] {
-    if (!status) return [...this.vehicles.values()]
-    return this.vehicles.values()
-      .filter(v => v.status == status)
-      .toArray()
+  public async getAll(): Promise<VehiclePreview[]> {
+    return await this.prisma.vehicle.findMany({
+      select: {
+        id: true,
+        model: true,
+        plate: true,
+        transportState: true,
+        color: true,
+        internalVolume: true,
+        maxLoad: true,
+        isActive: true,
+      }
+    })
   }
 
   /**
    * Adiciona um novo veículo.
    * @param requesterId nome de usuário do gerente ou admin.
    */
-  public register(requesterId: string, data: VehicleRegistrationPayload): Result<'created', 'plateAlreadyRegistered' | 'notAuthorized'> {
-    const requester = userManager.get(requesterId)
-    if (!requester || !isManager(requester)) return Err('notAuthorized')
+  public async create(creator: User, { licenseIds, ...data }: CreateVehicleRequest): Promise<Result<'', 'plateTaken'>> {
+    assert(creator.isActive && isManager(creator))
 
-    if (this.vehicles.has(data.plate)) return Err('plateAlreadyRegistered')
-    
-    this.vehicles.set(data.plate, {
-      ...data,
-      condition: 'active' as const,
-      status: 'free' as const,
-      registeredOn: new Date().toISOString(),
-      registeredBy: requesterId,
-    })
-
-    this.saveVehicles()
-    return Ok('created')
+    try {
+      await this.prisma.vehicle.create({
+        data: {
+          ...data,
+          licenses: {
+            createMany: {
+              data: licenseIds.map(l => ({ licenseId: l }))
+            }
+          },
+          createdBy: {
+            connect: { id: creator.id }
+          },
+        }
+      })
+    } catch (e) {
+      return Err('plateTaken')
+    }
+    return Ok('')
   }
 
   /**
    * Altera os dados de um veículo por pedido de `requesterId`.
    * @param requesterId nome de usuário do gerente ou admin.
    */
-  public patch(requesterId: string, plate: string, data: VehiclePatchPayload): Result<'edited', 'noSuchVehicle' | 'notAuthorized'> {
-    const requester = userManager.get(requesterId)
-    if (!requester || !isManager(requester)) return Err('notAuthorized')
-
-    const vehicle = this.get(plate)
+  public async update(requester: User, plate: string, { licenseIds, ...data }: UpdateVehicleRequest): Promise<Result<'', 'noSuchVehicle' | 'badRequest' | 'plateTaken'>> {
+    assert(isManager(requester))
+     
+    // Checar se o veículo existe
+    const vehicle = await this.prisma.vehicle.findFirst({ where: { plate } })
     if (!vehicle) return Err('noSuchVehicle')
 
-    this.vehicles.set(plate, { ...vehicle, ...data })
-    this.saveVehicles()
-    return Ok('edited')
-  }
+    // Checar se o novo nome de usuário está live
+    if (data.plate && await this.prisma.vehicle.findFirst({ where: { plate: data.plate }})) {
+      return Err('plateTaken')
+    }
 
-  /**
-   * Permite atualizar o status de um motorista.
-   * Não deve ser acessível para fora do programa.
-   */
-  public updateStatus(plate: string, data: TransportationStatus): Result<'ok', 'noSuchVehicle'> {
-    const vehicle = this.vehicles.get(plate)
-    if (!vehicle) return Err('noSuchVehicle')
+    try {
+      await this.prisma.vehicle.update({
+        where: { plate },
+        data: {
+          ...data,
+          licenses: licenseIds
+            ? {
+                createMany: {
+                  skipDuplicates: true,
+                  data: licenseIds.map(l => ({ licenseId: l }))
+                }
+              }
+            : undefined
+        }
+      })
 
-    this.vehicles.set(plate, { ...vehicle, ...data })
-    this.saveVehicles()
-    return Ok('ok')
+      // Remover licensas antigas
+      if (licenseIds) {
+        await this.prisma.vehicleToLicense.deleteMany({
+          where: { vehicleId: vehicle.id, licenseId: { notIn: licenseIds } }
+        })
+      }
+    } catch (e) {
+      return Err('badRequest')
+    }
+
+    return Ok('')
   }
 }
-
-export const vehicleManager = new VehicleManager()
