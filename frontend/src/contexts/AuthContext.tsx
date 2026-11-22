@@ -20,7 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (foundUser) {
       setUser(foundUser)
     } else {
-      alert('Usuário não encontrado nos mocks! Tente: admin, gerente.log, joao.atend, carlos.mot')
+      alert('Usuário não encontrado nos mocks! Tente: admin, admin2, gerente.log, joao.atend, carlos.mot')
     }
   }
 

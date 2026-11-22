@@ -120,7 +120,7 @@ export const LoginPage: React.FC = () => {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="ex: admin ou motorista1"
+                placeholder="ex: admin, admin2 ou carlos.mot"
                 required
                 style={{ 
                   height: '3rem', 
@@ -193,7 +193,7 @@ export const LoginPage: React.FC = () => {
 
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', fontSize: '0.8125rem', color: '#64748b', textAlign: 'center' }}>
             <strong>Usuários de Teste (Mock):</strong><br/>
-            admin (Admin) | gerente.log (Manager) <br/>
+            admin, admin2 (Admin) | gerente.log (Manager) <br/>
             joao.atend (Clerk) | carlos.mot (Driver)
           </div>
 

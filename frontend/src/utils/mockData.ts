@@ -6,6 +6,7 @@ import type { User } from '../models/user.ts'
 
 export const mockUsers: User[] = [
   { id: 'U-001', name: 'Administrador Supremo', username: 'admin', role: 'Admin', condition: 'active' },
+  { id: 'U-006', name: 'Administrador Geral', username: 'admin2', role: 'Admin', condition: 'active' },
   { id: 'U-002', name: 'Gerente Logístico', username: 'gerente.log', role: 'Manager', condition: 'active' },
   { id: 'U-003', name: 'João Atendente', username: 'joao.atend', role: 'Clerk', condition: 'active' },
   { id: 'U-004', name: 'Carlos Motorista', username: 'carlos.mot', role: 'Driver', condition: 'active', licenses: ['A', 'B', 'C'] },
