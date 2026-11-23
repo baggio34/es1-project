@@ -72,6 +72,10 @@ export class OrderManager {
       ...serializeDates(order),
       route: order.route ? serializeDates(order.route) : null,
       licenses: order.licenses.map(l => l.license),
+      statusBeforeCancellation: {
+        ...serializeDates(order),
+        status: order.statusBeforeCancellation,
+      }
     } as OrderDetailed
   }
 
