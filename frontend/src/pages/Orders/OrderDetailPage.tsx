@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
 import type { Order, OrderStatus } from '../../models/order.ts'
 import { Button } from '../../components/ui/button.tsx'
-import { Input } from '../../components/ui/input.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
-import { ArrowLeft, Pencil, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map } from 'lucide-react'
+import { ArrowLeft, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map, User } from 'lucide-react'
 import { getOrderStatusBadge, formatReg, formatCurrency } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
@@ -17,7 +16,7 @@ export interface OrderDetailPageProps {
   drivers?: any[]
   vehicles?: any[]
   onBack: () => void
-  onEdit: (id: number) => void
+  onEdit?: (id: number) => void
   onViewRoute?: (routeId: string) => void
   onAction?: (actionType: string, orderId: number, payload?: any) => void
 }
@@ -26,7 +25,7 @@ const statusOrderList: { key: OrderStatus; label: string }[] = [
   { key: 'pendingApproval', label: 'Aprovação' },
   { key: 'waitingPayment', label: 'Pagamento' },
   { key: 'inPreparation', label: 'Preparação' },
-  { key: 'loaded', label: 'Carga' },
+  { key: 'loaded', label: 'Carregado' },
   { key: 'waitingDispatch', label: 'Despacho' },
   { key: 'onRoute', label: 'Em Rota' },
   { key: 'arrived', label: 'Entregue' },
@@ -40,7 +39,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   drivers = [],
   vehicles = [],
   onBack,
-  onEdit,
+  onEdit: _onEdit,
   onViewRoute,
   onAction,
 }) => {
@@ -70,17 +69,78 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   
   const licenses = order.licenses || (order as any).requiredLicenses || []
   
-  const formatDate = (date?: string) => (date ? new Date(date).toLocaleString('pt-BR') : '')
-  const userName = (id: string) => users?.[id] ?? id
+  const formatDate = (date?: string) => {
+    if (!date) return ''
+    try {
+      const d = new Date(date)
+      if (isNaN(d.getTime())) return ''
+      return d.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return ''
+    }
+  }
 
-  const renderTimelineTimestamp = (stepKey: OrderStatus) => {
+  const getUserDisplayName = (u?: any): string => {
+    if (!u) return ''
+    if (typeof u === 'object') {
+      return u.name || u.username || u.id || ''
+    }
+    return users?.[u] ?? u
+  }
+
+  const userName = getUserDisplayName
+
+  const getStepTrackingInfo = (stepKey: OrderStatus) => {
+    let userRaw: any = undefined
+    let dateRaw: string | undefined = undefined
+
     switch (stepKey) {
-      case 'pendingApproval': return formatDate(order.createdOn)
-      case 'waitingPayment': return formatDate(order.approvedOn)
-      case 'inPreparation': return formatDate(order.paymentConfirmedOn)
-      case 'loaded': return formatDate(order.loadedAt)
-      case 'arrived': return formatDate(order.arrivedOn)
-      default: return ''
+      case 'pendingApproval':
+        userRaw = order.createdBy
+        dateRaw = order.createdOn || (order as any).createdAt
+        break
+      case 'waitingPayment':
+        userRaw = order.approvedBy
+        dateRaw = order.approvedOn
+        break
+      case 'inPreparation':
+        userRaw = order.paymentConfirmedBy
+        dateRaw = order.paymentConfirmedOn
+        break
+      case 'loaded':
+        userRaw = order.loadedBy
+        dateRaw = order.loadedAt || (order as any).loadedOn
+        break
+      case 'waitingDispatch':
+        userRaw = (order as any).dispatchedBy || (order as any).dispatchApprovedBy || order.loadedBy
+        dateRaw = (order as any).dispatchedOn || (order as any).dispatchApprovedOn || order.loadedAt || (order as any).loadedOn
+        break
+      case 'onRoute':
+        userRaw = (order as any).onRouteBy || (order as any).departedBy || route?.driverId || (order as any).driverName
+        dateRaw = (order as any).onRouteOn || (order as any).departedOn
+        break
+      case 'arrived':
+        userRaw = order.arrivedBy || (order as any).deliveredTo || route?.driverId
+        dateRaw = order.arrivedOn
+        break
+      default:
+        break
+    }
+
+    const userName = getUserDisplayName(userRaw)
+    const formattedDate = dateRaw ? formatDate(dateRaw) : ''
+    const hasData = Boolean(userName || formattedDate)
+
+    return {
+      userName,
+      formattedDate,
+      hasData,
     }
   }
 
@@ -150,7 +210,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           <div>
             <h1 className="page-title">Pedido #{order.id}</h1>
             <p className="page-description">
-              Registrado em {formatDate(order.createdOn)} por {userName(order.createdBy)}
+              Registrado em {formatDate(order.createdOn)} por {getUserDisplayName(order.createdBy)}
             </p>
           </div>
         </div>
@@ -166,22 +226,51 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
 
       {!isRejected && !isCancelled && !isAccident && (
         <Card style={{ marginBottom: '1.5rem' }}>
-          <CardContent style={{ padding: '1.25rem 2rem' }}>
+          <CardContent style={{ padding: '1.25rem 1.5rem' }}>
             <div className="order-timeline">
               {statusOrderList.map((step, idx) => {
-                const isCompleted = currentIndex > idx
-                const isCurrent = currentIndex === idx
-                const timestamp = renderTimelineTimestamp(step.key)
+                const isCompleted = order.status === 'arrived' ? true : currentIndex > idx
+                const isCurrent = order.status === 'arrived' ? false : currentIndex === idx
+                const stepInfo = getStepTrackingInfo(step.key)
+                const isPassed = isCompleted || (isCurrent && stepInfo.hasData)
+
                 return (
-                  <div key={step.key} className={`timeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`} style={{ position: 'relative' }}>
+                  <div
+                    key={step.key}
+                    className={`timeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}
+                  >
                     <div className="timeline-step-circle">
                       {isCompleted ? <CheckCircle size={16} /> : idx + 1}
                     </div>
                     <span className="timeline-step-label">{step.label}</span>
-                    {timestamp && (
-                      <span style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '4px', whiteSpace: 'nowrap' }}>
-                        {timestamp}
-                      </span>
+
+                    {isPassed ? (
+                      <div className="timeline-step-audit">
+                        <div
+                          className="timeline-step-audit-item"
+                          title={stepInfo.userName ? `Confirmado por: ${stepInfo.userName}` : 'Confirmado'}
+                        >
+                          <User size={11} className="timeline-step-audit-icon" />
+                          <span className="timeline-step-audit-name">
+                            {stepInfo.userName || 'Confirmado'}
+                          </span>
+                        </div>
+                        <div
+                          className="timeline-step-audit-item"
+                          title={stepInfo.formattedDate ? `Data: ${stepInfo.formattedDate}` : 'Data não informada'}
+                        >
+                          <Clock size={11} className="timeline-step-audit-icon" />
+                          <span className="timeline-step-audit-date">
+                            {stepInfo.formattedDate || '—'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="timeline-step-audit timeline-step-audit-pending">
+                        <div className="timeline-step-audit-item">
+                          <span className="timeline-step-audit-placeholder">—</span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )
