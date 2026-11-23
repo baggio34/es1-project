@@ -6,10 +6,16 @@ export type OrderStatus =
   | 'onRoute' | 'arrived' | 'accident' | 'resolvedAccident'
   | 'cancelled'
 
+export interface UserSignature {
+  id: string
+  username: string
+  name: string
+}
+
 export interface OrderBase {
   id: number
   createdOn: string
-  createdBy: string
+  createdBy: string | UserSignature
   description: string
   clientName: string
   clientRegistration: string
@@ -24,23 +30,31 @@ export interface OrderBase {
 
 export interface Order extends OrderBase {
   approvedOn?: string
-  approvedBy?: string
+  approvedBy?: string | UserSignature
   rejectedOn?: string
-  rejectedBy?: string
+  rejectedBy?: string | UserSignature
   reason?: string
   paymentConfirmedOn?: string
-  paymentConfirmedBy?: string
-  loadedBy?: string
+  paymentConfirmedBy?: string | UserSignature
+  loadedBy?: string | UserSignature
   loadedAt?: string
+  loadedOn?: string
+  dispatchedOn?: string
+  dispatchedBy?: string | UserSignature
+  dispatchApprovedOn?: string
+  dispatchApprovedBy?: string | UserSignature
+  onRouteOn?: string
+  onRouteBy?: string | UserSignature
   routeId?: string
   arrivedOn?: string
+  arrivedBy?: string | UserSignature
   accidentOn?: string
   accidentDescription?: string
   resolvedOn?: string
-  resolvedBy?: string
+  resolvedBy?: string | UserSignature
   resolutionDescription?: string
   previousStatus?: { status: OrderStatus }
-  cancelledBy?: string
+  cancelledBy?: string | UserSignature
   cancelledOn?: string
   cancellationReason?: string
 }
