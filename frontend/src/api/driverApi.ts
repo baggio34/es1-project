@@ -8,4 +8,7 @@ export const driverApi = {
     
   getAll: () => 
     apiFetch<UserGetReply[]>('/drivers'),
+
+  getMyRoutes: () =>
+    apiFetch<DriverRoutesGetReply>('/drivers/my-routes'),
 }

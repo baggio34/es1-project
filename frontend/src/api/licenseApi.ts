@@ -8,9 +8,9 @@ export const licenseApi = {
   getAll: () => 
     apiFetch<LicenseGetReply>('/licenses'),
     
-  update: (slug: string, data: LicenseCreationPayload) => 
-    apiFetch<string>(`/licenses/${slug}`, { method: 'PUT', body: JSON.stringify(data) }),
+  update: (id: string, data: LicenseCreationPayload) => 
+    apiFetch<string>(`/licenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
-  delete: (slug: string) => 
-    apiFetch<string>(`/licenses/${slug}`, { method: 'DELETE' }),
+  delete: (id: string) => 
+    apiFetch<string>(`/licenses/${id}`, { method: 'DELETE' }),
 }

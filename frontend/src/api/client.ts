@@ -12,7 +12,8 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-  const url = `${API_BASE}${endpoint}`
+  const prefix = endpoint === '/login' ? '' : '/api'
+  const url = `${API_BASE}${prefix}${endpoint}`
 
   const headers = new Headers(options?.headers)
   
