@@ -1,16 +1,19 @@
 import React, { useState } from 'react'
-import type { Route } from '../../models/route.ts'
-import type { Vehicle } from '../../models/vehicle.ts'
+import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
+import type { DriverPreview } from '../../../../sdk/src/models/user.ts'
+import type { VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Eye, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 import { getRouteStatusBadge } from '../../utils/formatters.tsx'
 
+export type RouteListItem = RoutePreview | RouteWithOrders
+
 export interface RouteListPageProps {
-  routes: Route[]
-  drivers: any[]           
-  vehicles: Vehicle[]         
+  routes: RouteListItem[]
+  drivers?: DriverPreview[]
+  vehicles?: VehiclePreview[]
   onReload: () => void
   onViewDetails: (id: string) => void
   onAuthorizeDispatch: (id: string) => void
@@ -19,8 +22,6 @@ export interface RouteListPageProps {
 
 export const RouteListPage: React.FC<RouteListPageProps> = ({
   routes,
-  drivers,
-  vehicles,
   onReload,
   onViewDetails,
   onAuthorizeDispatch,
@@ -33,15 +34,6 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
     const matchesStatus = statusFilter === 'all' || route.status === statusFilter
     return matchesStatus
   })
-
-  const getDriverName = (driverId: string) => {
-    const driver = drivers.find((d) => (d.user ? d.user.username === driverId : d.id === driverId))
-    return driver ? (driver.user ? driver.user.name : driver.name) : driverId
-  }
-  const getVehicleModel = (vehicleId: string) => {
-    const vehicle = vehicles.find((v) => v.plate === vehicleId || v.id === vehicleId)
-    return vehicle ? `${vehicle.model} (${vehicle.plate})` : vehicleId
-  }
 
   return (
     <div>
@@ -65,15 +57,15 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
             Filtrar Status:
           </span>
           <Select
-            style={{ width: '250px' }}
+            style={{ width: '270px' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos os Status' },
-              { value: 'waitingOperatorOrder', label: 'Em Montagem (Aguard. Operador)' },
-              { value: 'readyToDispatch', label: 'Autorizada (Aguard. Saída)' },
-              { value: 'onCourse', label: 'Em Curso' },
-              { value: 'completed', label: 'Concluída' },
+              { value: 'WAITING_OPERATOR_AUTHORIZATION', label: 'Em Montagem (Aguard. Operador)' },
+              { value: 'WAITING_DRIVER_DISPATCH', label: 'Autorizada (Aguard. Despacho)' },
+              { value: 'ON_COURSE', label: 'Em Curso' },
+              { value: 'COMPLETED', label: 'Concluída' },
             ]}
           />
         </div>
@@ -83,10 +75,10 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[110px]">ID Rota</TableHead>
-            <TableHead className="min-w-[150px]">Motorista</TableHead>
-            <TableHead className="min-w-[150px]">Veículo</TableHead>
-            <TableHead className="min-w-[150px]">Status</TableHead>
-            <TableHead className="min-w-[150px]">Pedidos</TableHead>
+            <TableHead className="min-w-[160px]">Motorista</TableHead>
+            <TableHead className="min-w-[180px]">Veículo</TableHead>
+            <TableHead className="min-w-[160px]">Status</TableHead>
+            <TableHead className="min-w-[120px]">Pedidos</TableHead>
             <TableHead className="w-[140px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -101,8 +93,8 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
             </TableRow>
           ) : (
             filteredRoutes.map((route) => {
-              // Garante que o front-end conte os pedidos corretamente quer a propriedade se chame 'orders' ou 'orderIds'
-              const orderCount = route.orders?.length || (route as any).orderIds?.length || 0;
+              const orderCount =
+                'orders' in route && Array.isArray(route.orders) ? route.orders.length : undefined
 
               return (
                 <TableRow key={route.id}>
@@ -118,19 +110,22 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
                       #{route.id.slice(0, 8)}
                     </span>
                   </TableCell>
-                  <TableCell style={{ fontWeight: 600 }}>
-                    {getDriverName(route.driverId)}
+                  <TableCell>
+                    <div style={{ fontWeight: 600 }}>{route.driver.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                      @{route.driver.username}
+                    </div>
                   </TableCell>
                   <TableCell style={{ fontWeight: 600 }}>
-                    {getVehicleModel(route.vehicleId)}
+                    {route.vehicle.model} ({route.vehicle.plate.toUpperCase()})
                   </TableCell>
                   <TableCell>{getRouteStatusBadge(route.status)}</TableCell>
                   <TableCell style={{ color: 'var(--color-text-secondary)' }}>
-                    {orderCount} pedidos
+                    {orderCount !== undefined ? `${orderCount} pedido(s)` : '—'}
                   </TableCell>
                   <TableCell style={{ textAlign: 'right' }}>
                     <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                      {route.status === 'waitingOperatorOrder' && (
+                      {route.status === 'WAITING_OPERATOR_AUTHORIZATION' && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -139,7 +134,7 @@ export const RouteListPage: React.FC<RouteListPageProps> = ({
                           onClick={() => onAuthorizeDispatch(route.id)}
                         />
                       )}
-                      {route.status === 'readyToDispatch' && (
+                      {route.status === 'WAITING_DRIVER_DISPATCH' && (
                         <Button
                           variant="ghost"
                           size="sm"

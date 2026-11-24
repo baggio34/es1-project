@@ -35,6 +35,7 @@ import { LicensesPage } from './Licenses/LicensesPage.tsx'
 
 import { driverApi } from '../api/driverApi'
 import type { OrderDetailed } from '../../../sdk/src/models/order.ts'
+import type { RouteWithOrders } from '../../../sdk/src/models/route.ts'
 import type { UserDetailed } from '../../../sdk/src/models/user.ts'
 import type { GetDriversReply } from '../../../sdk/src/dtos/user.dto.ts'
 
@@ -77,13 +78,13 @@ export default function App() {
   const { users, loadUsers, registerUser, api: userApi } = useUser()
 
   useEffect(() => {
-    if (user) {
-      loadDrivers().catch(console.error)
-      loadVehicles().catch(console.error)
-      loadOrders().catch(console.error)
-      loadRoutes().catch(console.error)
-      loadUsers().catch(console.error)
-    }
+    if (!user) return
+    loadRoutes().catch(console.error)
+    if (user.role === 'DRIVER') return
+    loadDrivers().catch(console.error)
+    loadVehicles().catch(console.error)
+    loadOrders().catch(console.error)
+    loadUsers().catch(console.error)
   }, [user, loadDrivers, loadVehicles, loadOrders, loadRoutes, loadUsers])
 
   if (!user) {
@@ -107,12 +108,16 @@ export default function App() {
   const allDrivers = safeUsers.filter((u) => u.role === 'DRIVER')
 
   const userRole = user?.role?.toLowerCase()
+  const reloadAll = () =>
+    Promise.allSettled(
+      user.role === 'DRIVER'
+        ? [loadRoutes()]
+        : [loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()]
+    )
 
-  const activeDriverRoute = mappedRoutes.find((r) => r.driverId === user?.username && r.status !== 'completed')
-  const activeDriverOrders = activeDriverRoute
-    ? mappedOrders.filter((o) => activeDriverRoute.orders?.includes(o.id) || activeDriverRoute.orders?.includes(String(o.id)))
-    : []
-  const pastDriverRoutes = mappedRoutes.filter((r) => r.driverId === user?.username && r.status === 'completed')
+  const driverRoutes = mappedRoutes.filter((r) => r.driver?.username === user?.username)
+  const activeDriverRoute = driverRoutes.find((r) => r.status !== 'COMPLETED')
+  const pastDriverRoutes = driverRoutes.filter((r) => r.status === 'COMPLETED')
 
   return (
     <ErrorBoundary>
@@ -327,42 +332,12 @@ export default function App() {
             <Route
               path="driver-routes"
               element={
-                <DriverRoutesPage
-                  currentRoute={activeDriverRoute}
-                  currentOrders={activeDriverOrders}
+                <DriverRoutesWrapper
+                  activeRoute={activeDriverRoute}
                   pastRoutes={pastDriverRoutes}
-                  onConfirmDispatch={async (id) => {
-                    try {
-                      await routeApi.confirmDispatch(id)
-                      await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()])
-                    } catch (err: any) {
-                      alert(`Erro ao iniciar percurso: ${err.message}`)
-                    }
-                  }}
-                  onConfirmArrival={async (orderId) => {
-                    try {
-                      await orderApi.confirmArrival(Number(orderId))
-                      await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()])
-                    } catch (err: any) {
-                      alert(`Erro ao confirmar entrega: ${err.message}`)
-                    }
-                  }}
-                  onReportAccident={async (orderId) => {
-                    try {
-                      const reason = prompt('Descreva o motivo do acidente/problema:')
-                      if (reason) {
-                        await orderApi.reportAccident(Number(orderId), { accident: reason })
-                        await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()])
-                      }
-                    } catch (err: any) {
-                      alert(`Erro ao reportar acidente: ${err.message}`)
-                    }
-                  }}
-                  onViewOrderDetails={(id) => navigate(`/orders/${id}`)}
-                  onViewRouteDetails={(id) => navigate(`/routes/${id}`)}
-                  onReload={async () => {
-                    await Promise.allSettled([loadRoutes(), loadOrders(), loadDrivers(), loadVehicles()])
-                  }}
+                  routeApi={routeApi}
+                  orderApi={orderApi}
+                  reloadAll={reloadAll}
                 />
               }
             />
@@ -603,6 +578,58 @@ function VehicleFormWrapper({ vehicles, onSave }: { vehicles: any[]; onSave: (da
   )
 }
 
+function DriverRoutesWrapper({ activeRoute, pastRoutes, routeApi, orderApi, reloadAll }: any) {
+  const navigate = useNavigate()
+  const [currentRoute, setCurrentRoute] = useState<RouteWithOrders | undefined>(undefined)
+
+  useEffect(() => {
+    if (!activeRoute) {
+      setCurrentRoute(undefined)
+      return
+    }
+    routeApi.getById(activeRoute.id).then(setCurrentRoute).catch(console.error)
+  }, [activeRoute, routeApi])
+
+  return (
+    <DriverRoutesPage
+      currentRoute={currentRoute}
+      pastRoutes={pastRoutes}
+      onConfirmDispatch={async (id) => {
+        try {
+          await routeApi.confirmDispatch(id)
+          await reloadAll()
+        } catch (err: any) {
+          alert(`Erro ao iniciar percurso: ${err.message}`)
+        }
+      }}
+      onConfirmArrival={async (orderId) => {
+        try {
+          await orderApi.confirmArrival(orderId)
+          await reloadAll()
+        } catch (err: any) {
+          alert(`Erro ao confirmar entrega: ${err.message}`)
+        }
+      }}
+      onReportAccident={async (orderId) => {
+        try {
+          const reason = prompt('Descreva o motivo do acidente/problema:')
+          if (reason) {
+            await orderApi.reportAccident(orderId, { accident: reason })
+            await reloadAll()
+          }
+        } catch (err: any) {
+          alert(`Erro ao reportar acidente: ${err.message}`)
+        }
+      }}
+      onViewOrderDetails={(id) => navigate(`/orders/${id}`)}
+      onViewRouteDetails={(id) => navigate(`/routes/${id}`)}
+      onReload={async () => {
+        await reloadAll()
+      }}
+    />
+  )
+}
+
 function DriverDetailWrapper({ drivers, routes, vehicles }: any) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -631,7 +658,7 @@ function RouteDetailWrapper({ routes, orders, routeApi, loadRoutes, loadOrders, 
 
   const isDriver = user?.role?.toLowerCase() === 'driver'
 
-  if (isDriver && route.driverId !== user?.username) {
+  if (isDriver && route.driver?.username !== user?.username) {
     return (
       <div style={{ padding: '4rem', textAlign: 'center', fontFamily: 'sans-serif' }}>
         <h2>Acesso Negado</h2>

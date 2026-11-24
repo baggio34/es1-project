@@ -198,9 +198,6 @@ CREATE INDEX "Vehicles_transportState_idx" ON "Vehicles"("transportState");
 CREATE INDEX "VehiclesToLicenses_licenseId_idx" ON "VehiclesToLicenses"("licenseId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Orders_routeId_key" ON "Orders"("routeId");
-
--- CreateIndex
 CREATE INDEX "Orders_status_idx" ON "Orders"("status");
 
 -- CreateIndex

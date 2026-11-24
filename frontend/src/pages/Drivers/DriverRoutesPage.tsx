@@ -1,27 +1,24 @@
 import React from 'react'
-import type { Route } from '../../models/route.ts'
-import type { Order } from '../../models/order.ts'
+import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
-import { Map, Package, CheckCircle, AlertTriangle, Eye, RefreshCw } from 'lucide-react'
+import { Map, CheckCircle, AlertTriangle, Eye, RefreshCw } from 'lucide-react'
 import { getOrderStatusBadge, getRouteStatusBadge } from '../../utils/formatters.tsx'
 
 export interface DriverRoutesPageProps {
-  currentRoute?: Route
-  currentOrders?: Order[]
-  pastRoutes: Route[]
+  currentRoute?: RouteWithOrders
+  pastRoutes: RoutePreview[]
   onConfirmDispatch?: (routeId: string) => void
-  onConfirmArrival?: (orderId: string) => void
-  onReportAccident?: (orderId: string) => void
-  onViewOrderDetails: (orderId: string) => void
+  onConfirmArrival?: (orderId: number) => void
+  onReportAccident?: (orderId: number) => void
+  onViewOrderDetails: (orderId: number) => void
   onViewRouteDetails: (routeId: string) => void
   onReload: () => void
 }
 
 export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
   currentRoute,
-  currentOrders = [],
   pastRoutes,
   onConfirmDispatch,
   onConfirmArrival,
@@ -30,6 +27,10 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
   onViewRouteDetails,
   onReload,
 }) => {
+  const orders = currentRoute
+    ? [...currentRoute.orders].sort((a, b) => a.routeIndex - b.routeIndex)
+    : []
+
   return (
     <div>
       <div className="page-header">
@@ -51,11 +52,14 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
           <CardHeader style={{ backgroundColor: 'var(--color-bg-subtle)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Map size={20} color="var(--color-primary)" />
-              <CardTitle>Rota em Execução #{currentRoute.id.slice(0, 8)}</CardTitle>
+              <CardTitle>Rota #{currentRoute.id.slice(0, 8)}</CardTitle>
+              <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                {currentRoute.vehicle.model} • {currentRoute.vehicle.plate.toUpperCase()}
+              </span>
             </div>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               {getRouteStatusBadge(currentRoute.status)}
-              {currentRoute.status === 'readyToDispatch' && (
+              {currentRoute.status === 'WAITING_DRIVER_DISPATCH' && (
                 <Button variant="default" icon={<CheckCircle size={16} />} onClick={() => onConfirmDispatch?.(currentRoute.id)}>
                   Iniciar Percurso
                 </Button>
@@ -64,11 +68,11 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
           </CardHeader>
           <CardContent style={{ paddingTop: '1.5rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Pedidos da Rota</h3>
-            {currentOrders.length === 0 ? (
+            {orders.length === 0 ? (
               <div style={{ padding: '1rem', color: 'var(--color-text-muted)' }}>Nenhum pedido carregado nesta rota.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {currentOrders.map(order => (
+                {orders.map((order) => (
                   <div key={order.id} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -76,28 +80,28 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
                     padding: '1rem',
                     border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-md)',
-                    backgroundColor: order.status === 'arrived' ? 'var(--color-success-bg)' : 'transparent'
+                    backgroundColor: order.status === 'ARRIVED' ? 'var(--color-success-bg)' : 'transparent',
                   }}>
                     <div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-primary)' }}>#{order.id}</strong>
                         {getOrderStatusBadge(order.status)}
                       </div>
-                      <p style={{ fontWeight: 500, marginTop: '0.25rem' }}>{order.description}</p>
+                      <p style={{ fontWeight: 500, marginTop: '0.25rem' }}>{order.clientName}</p>
                       <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Destino: {order.destination}</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {currentRoute.status === 'onCourse' && order.status === 'onRoute' && (
+                      {currentRoute.status === 'ON_COURSE' && order.status === 'ON_ROUTE' && (
                         <>
-                          <Button variant="default" size="sm" icon={<CheckCircle size={15} />} onClick={() => onConfirmArrival?.(String(order.id))}>
+                          <Button variant="default" size="sm" icon={<CheckCircle size={15} />} onClick={() => onConfirmArrival?.(order.id)}>
                             Marcar Entregue
                           </Button>
-                          <Button variant="outline" size="sm" style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }} icon={<AlertTriangle size={15} />} onClick={() => onReportAccident?.(String(order.id))}>
+                          <Button variant="outline" size="sm" style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }} icon={<AlertTriangle size={15} />} onClick={() => onReportAccident?.(order.id)}>
                             Acidente
                           </Button>
                         </>
                       )}
-                      <Button variant="ghost" size="sm" icon={<Eye size={15} />} onClick={() => onViewOrderDetails(String(order.id))}>
+                      <Button variant="ghost" size="sm" icon={<Eye size={15} />} onClick={() => onViewOrderDetails(order.id)}>
                         Detalhes
                       </Button>
                     </div>
@@ -123,7 +127,7 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
           <TableRow>
             <TableHead className="w-[110px]">ID Rota</TableHead>
             <TableHead className="min-w-[150px]">Status</TableHead>
-            <TableHead className="min-w-[150px]">Volume de Pedidos</TableHead>
+            <TableHead className="min-w-[150px]">Veículo</TableHead>
             <TableHead className="w-[140px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -146,7 +150,7 @@ export const DriverRoutesPage: React.FC<DriverRoutesPageProps> = ({
                 </TableCell>
                 <TableCell>{getRouteStatusBadge(route.status)}</TableCell>
                 <TableCell style={{ color: 'var(--color-text-secondary)' }}>
-                  {route.orders?.length || (route as any).orderIds?.length || 0} pedidos vinculados
+                  {route.vehicle.model} • {route.vehicle.plate.toUpperCase()}
                 </TableCell>
                 <TableCell style={{ textAlign: 'right' }}>
                   <Button variant="ghost" size="sm" icon={<Eye size={15} />} onClick={() => onViewRouteDetails(route.id)}>

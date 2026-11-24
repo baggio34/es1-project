@@ -164,7 +164,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
             Carregar Pedido
           </Button>
         )
-      case 'WAITING_DISPATCH':
+      case 'LOADED':
         return (
           <Button variant="outline" icon={<Box size={16} />} onClick={() => onAction?.('unload', order.id)}>
             Descarregar Pedido
