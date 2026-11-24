@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react'
-import type { Vehicle, VehicleFormData, VehicleStatus } from '../../models/vehicle.ts'
+import type { VehicleDetailed, VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
+import type { LicensePreview } from '../../../../sdk/src/models/license.ts'
+import type { CreateVehicleRequest, UpdateVehicleRequest } from '../../../../sdk/src/dtos/vehicle.dto.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
-import { ArrowLeft, Check, AlertCircle, Plus, X, Trash2 } from 'lucide-react'
+import { NativeSelect as Select } from '../../components/ui/select.tsx'
+import { ArrowLeft, Check, AlertCircle, Plus, X} from 'lucide-react'
 import { useLicense } from '../../view_models/useLicense.ts'
+import { vehicleApi } from '../../api/vehicleApi.ts'
 
 export interface VehicleFormPageProps {
-  initialVehicle?: Vehicle | null
-  onSave: (data: VehicleFormData) => Promise<void>
+  initialVehicle?: VehicleDetailed | VehiclePreview | null
+  onSave: (data: CreateVehicleRequest | Partial<UpdateVehicleRequest>) => Promise<void>
   onCancel: () => void
 }
 
@@ -20,41 +24,77 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
 }) => {
   const isEditing = !!initialVehicle
 
-  const [model, setModel] = useState(initialVehicle ? initialVehicle.model : '')
-  const [plate, setPlate] = useState(initialVehicle ? initialVehicle.plate : '')
-  const [color, setColor] = useState(initialVehicle ? initialVehicle.color : '')
+  const [detailedVehicle, setDetailedVehicle] = useState<VehicleDetailed | null>(
+    initialVehicle && 'licenses' in initialVehicle ? initialVehicle : null
+  )
+
+  const [model, setModel] = useState(initialVehicle?.model || '')
+  const [plate, setPlate] = useState(initialVehicle?.plate || '')
+  const [color, setColor] = useState(initialVehicle?.color || '')
   const [internalVolume, setInternalVolume] = useState<number | string>(
-    initialVehicle ? initialVehicle.internalVolume : ''
+    initialVehicle?.internalVolume ?? ''
   )
   const [maxLoad, setMaxLoad] = useState<number | string>(
-    initialVehicle ? initialVehicle.maxLoad : ''
+    initialVehicle?.maxLoad ?? ''
   )
-  const [licenses, setLicenses] = useState<string[]>(
-    initialVehicle && (initialVehicle as any).licenses ? (initialVehicle as any).licenses : []
-  )
-  const [status, setStatus] = useState<VehicleStatus>(
-    initialVehicle ? initialVehicle.status : 'free'
+  const [isActive, setIsActive] = useState<boolean>(initialVehicle?.isActive ?? true)
+  const [licenseIds, setLicenseIds] = useState<string[]>(
+    initialVehicle && 'licenses' in initialVehicle
+      ? (initialVehicle.licenses ?? []).map((l: LicensePreview) => l.id)
+      : []
   )
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses, createLicense, deleteLicense } = useLicense()
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses, createLicense} = useLicense()
   const [newLicenseName, setNewLicenseName] = useState('')
 
   useEffect(() => {
     loadLicenses().catch(console.error)
   }, [loadLicenses])
 
-  const handleAddLicense = (license: string) => {
-    if (!licenses.includes(license)) {
-      setLicenses((prev) => [...prev, license])
+  useEffect(() => {
+    if (!initialVehicle) return
+
+    setModel(initialVehicle.model)
+    setPlate(initialVehicle.plate)
+    setColor(initialVehicle.color)
+    setInternalVolume(initialVehicle.internalVolume)
+    setMaxLoad(initialVehicle.maxLoad)
+    setIsActive(initialVehicle.isActive)
+
+    if ('licenses' in initialVehicle && Array.isArray(initialVehicle.licenses)) {
+      setDetailedVehicle(initialVehicle)
+      setLicenseIds(initialVehicle.licenses.map((l: LicensePreview) => l.id))
+    } else {
+      vehicleApi
+        .getByPlate(initialVehicle.plate)
+        .then((fullVehicle) => {
+          setDetailedVehicle(fullVehicle)
+          setLicenseIds((fullVehicle.licenses ?? []).map((l: LicensePreview) => l.id))
+        })
+        .catch(console.error)
+    }
+  }, [initialVehicle])
+
+  const handleAddLicense = (licenseId: string) => {
+    if (!licenseIds.includes(licenseId)) {
+      setLicenseIds((prev) => [...prev, licenseId])
     }
   }
 
-  const handleRemoveLicense = (license: string) => {
-    setLicenses((prev) => prev.filter((l) => l !== license))
+  const handleRemoveLicense = (licenseId: string) => {
+    setLicenseIds((prev) => prev.filter((id) => id !== licenseId))
+  }
+
+  const getLicenseName = (id: string) => {
+    const fromDb = dbLicenses.find((l) => l.id === id)
+    if (fromDb) return fromDb.name
+    const fromVehicle = (detailedVehicle?.licenses ?? []).find((l: LicensePreview) => l.id === id)
+    if (fromVehicle) return fromVehicle.name
+    return id
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,21 +121,27 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
     setIsSubmitting(true)
 
     try {
-      const payload: any = {
-        model: model.trim(),
-        color: color.trim(),
-        internalVolume: Number(internalVolume),
-        maxLoad: Number(maxLoad),
-        licenses, 
-      }
-
       if (isEditing) {
-        payload.condition = initialVehicle && (initialVehicle as any).condition ? (initialVehicle as any).condition : 'active'
+        const updatePayload: Partial<UpdateVehicleRequest> = {
+          model: model.trim(),
+          color: color.trim(),
+          internalVolume: Number(internalVolume),
+          maxLoad: Number(maxLoad),
+          isActive,
+          licenseIds,
+        }
+        await onSave(updatePayload)
       } else {
-        payload.plate = cleanPlate
+        const createPayload: CreateVehicleRequest = {
+          plate: cleanPlate,
+          model: model.trim(),
+          color: color.trim(),
+          internalVolume: Number(internalVolume),
+          maxLoad: Number(maxLoad),
+          licenseIds,
+        }
+        await onSave(createPayload)
       }
-
-      await onSave(payload)
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o veículo. Tente novamente.')
     } finally {
@@ -145,7 +191,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                 Modelo / Fabricante
               </Label>
               <Input
-                autoComplete='off'
+                autoComplete="off"
                 id="vehicle-model"
                 placeholder="Ex: Mercedes-Benz Sprinter 415 CDI"
                 value={model}
@@ -167,12 +213,12 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Placa (7 caracteres)
                 </Label>
                 <Input
-                  autoComplete='off'
+                  autoComplete="off"
                   id="vehicle-plate"
                   placeholder="Ex: ABC1D23"
                   maxLength={7}
                   value={plate}
-                  disabled={isSubmitting || isEditing} 
+                  disabled={isSubmitting || isEditing}
                   onChange={(e) => {
                     setPlate(e.target.value.toUpperCase())
                     if (errors.plate) setErrors((prev) => ({ ...prev, plate: '' }))
@@ -189,7 +235,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Cor Predominante
                 </Label>
                 <Input
-                  autoComplete='off'
+                  autoComplete="off"
                   id="vehicle-color"
                   placeholder="Ex: Branco, Azul, Prata"
                   value={color}
@@ -212,7 +258,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Volume Interno Útil (m³)
                 </Label>
                 <Input
-                  autoComplete='off'
+                  autoComplete="off"
                   id="vehicle-volume"
                   type="number"
                   step="0.1"
@@ -236,7 +282,7 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   Carga Máxima Permitida (kg)
                 </Label>
                 <Input
-                  autoComplete='off'
+                  autoComplete="off"
                   id="vehicle-load"
                   type="number"
                   step="1"
@@ -256,6 +302,24 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
               </div>
             </div>
 
+            {isEditing && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="vehicle-status" className="text-sm font-semibold text-slate-700">
+                  Status do Veículo na Frota
+                </Label>
+                <Select
+                  id="vehicle-status"
+                  value={isActive ? 'true' : 'false'}
+                  onChange={(e) => setIsActive(e.target.value === 'true')}
+                  disabled={isSubmitting}
+                  options={[
+                    { value: 'true', label: 'Ativo' },
+                    { value: 'false', label: 'Desativado' },
+                  ]}
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
                 Licenças Requeridas e do Sistema
@@ -263,17 +327,17 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
               <p className="text-xs text-slate-500" style={{ marginTop: '-0.25rem' }}>
                 Gerencie as licenças disponíveis no banco de dados e vincule-as ao veículo.
               </p>
-              
+
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
-                {licenses.map((license) => (
-                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                    {license}
+                {licenseIds.map((licId) => (
+                  <Badge key={licId} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    {getLicenseName(licId)}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        handleRemoveLicense(license)
+                        handleRemoveLicense(licId)
                       }}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', color: 'inherit' }}
                     >
@@ -300,12 +364,12 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                 >
                   <option value="" disabled>Selecione uma licença...</option>
                   {dbLicenses
-                    .filter((l) => !licenses.includes(l.name))
+                    .filter((l) => !licenseIds.includes(l.id))
                     .map((l) => (
-                      <option key={l.slug} value={l.name} data-slug={l.slug}>
+                      <option key={l.id} value={l.id}>
                         {l.name}
                       </option>
-                  ))}
+                    ))}
                 </select>
                 <Button
                   type="button"
@@ -322,27 +386,6 @@ export const VehicleFormPage: React.FC<VehicleFormPageProps> = ({
                   }}
                 >
                   Vincular
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }}
-                  icon={<Trash2 size={14} />}
-                  disabled={isSubmitting || loadingLicenses}
-                  title="Excluir a licença selecionada do sistema"
-                  onClick={async () => {
-                    const select = document.getElementById('vehicle-license-select') as HTMLSelectElement
-                    if (select?.value) {
-                      const slug = dbLicenses.find((l) => l.name === select.value)?.slug
-                      if (slug && window.confirm(`Deseja realmente excluir permanentemente a licença "${select.value}" do sistema?`)) {
-                        await deleteLicense(slug)
-                        select.value = ''
-                      }
-                    }
-                  }}
-                >
-                  Excluir
                 </Button>
               </div>
 

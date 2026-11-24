@@ -6,11 +6,13 @@ import { Modal } from '../../components/ui/Modal.tsx'
 import { Plus, Search, Pencil, Trash2, RefreshCw, Award, AlertCircle } from 'lucide-react'
 import { useLicense } from '../../view_models/useLicense.ts'
 import { useAuth } from '../../contexts/AuthContext.tsx'
-import type { License } from '../../models/license.ts'
+import type { LicenseDetailed } from '../../../../sdk/src/models/license.ts'
+
 
 export const LicenseListPage: React.FC = () => {
   const { user } = useAuth()
-  const canManage = user?.role === 'admin' || user?.role === 'manager'
+  
+  const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER'
 
   const { licenses, loading, error, loadLicenses, createLicense, updateLicense, deleteLicense } = useLicense()
 
@@ -20,11 +22,11 @@ export const LicenseListPage: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null)
 
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingLicense, setEditingLicense] = useState<License | null>(null)
+  const [editingLicense, setEditingLicense] = useState<LicenseDetailed | null>(null)
   const [editLicenseName, setEditLicenseName] = useState('')
   const [editError, setEditError] = useState<string | null>(null)
 
-  const [licenseToDelete, setLicenseToDelete] = useState<License | null>(null)
+  const [licenseToDelete, setLicenseToDelete] = useState<LicenseDetailed | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -43,10 +45,7 @@ export const LicenseListPage: React.FC = () => {
       .replace(/--+/g, '-')
   }
 
-  const filteredLicenses = licenses.filter((l) => {
-    const term = searchTerm.toLowerCase()
-    return l.name.toLowerCase().includes(term) || l.slug.toLowerCase().includes(term)
-  })
+  const filteredLicenses = licenses.filter((l) => l.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
   const handleOpenCreate = () => {
     setNewLicenseName('')
@@ -60,8 +59,8 @@ export const LicenseListPage: React.FC = () => {
       setCreateError('O nome da licença é obrigatório.')
       return
     }
-    const slug = slugify(trimmed)
-    if (licenses.some((l) => l.slug === slug)) {
+    const id = slugify(trimmed)
+    if (licenses.some((l) => l.id === id)) {
       setCreateError('Já existe uma licença cadastrada com este nome ou identificador.')
       return
     }
@@ -79,7 +78,7 @@ export const LicenseListPage: React.FC = () => {
     }
   }
 
-  const handleOpenEdit = (lic: License) => {
+  const handleOpenEdit = (lic: LicenseDetailed) => {
     setEditingLicense(lic)
     setEditLicenseName(lic.name)
     setEditError(null)
@@ -94,7 +93,7 @@ export const LicenseListPage: React.FC = () => {
       return
     }
     const newSlug = slugify(trimmed)
-    if (newSlug !== editingLicense.slug && licenses.some((l) => l.slug === newSlug)) {
+    if (newSlug !== editingLicense.id && licenses.some((l) => l.id === newSlug)) {
       setEditError('Já existe outra licença cadastrada com este nome.')
       return
     }
@@ -102,7 +101,7 @@ export const LicenseListPage: React.FC = () => {
     try {
       setIsSubmitting(true)
       setEditError(null)
-      await updateLicense(editingLicense.slug, { name: trimmed })
+      await updateLicense(editingLicense.id, { name: trimmed })
       setEditModalOpen(false)
       setEditingLicense(null)
     } catch (err: any) {
@@ -116,7 +115,7 @@ export const LicenseListPage: React.FC = () => {
     if (!licenseToDelete) return
     try {
       setIsSubmitting(true)
-      await deleteLicense(licenseToDelete.slug)
+      await deleteLicense(licenseToDelete.id)
       setLicenseToDelete(null)
     } catch (err: any) {
       alert(`Erro ao excluir licença: ${err.message || 'Erro desconhecido.'}`)
@@ -169,7 +168,7 @@ export const LicenseListPage: React.FC = () => {
           <Search size={16} />
           <Input
             className="pl-10"
-            placeholder="Buscar por nome da licença ou slug..."
+            placeholder="Buscar por nome da licença ou id..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -180,7 +179,7 @@ export const LicenseListPage: React.FC = () => {
         <TableHeader>
           <TableRow>
             <TableHead className="min-w-[200px]">Nome da Licença</TableHead>
-            <TableHead className="min-w-[180px]">Identificador Único (Slug)</TableHead>
+            <TableHead className="min-w-[180px]">Identificador Único (ID)</TableHead>
             <TableHead className="w-[140px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -201,7 +200,7 @@ export const LicenseListPage: React.FC = () => {
             </TableRow>
           ) : (
             filteredLicenses.map((lic) => (
-              <TableRow key={lic.slug}>
+              <TableRow key={lic.id}>
                 <TableCell>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
                     <div style={{
@@ -228,7 +227,7 @@ export const LicenseListPage: React.FC = () => {
                     color: 'var(--color-text-secondary)',
                     fontFamily: 'monospace'
                   }}>
-                    {lic.slug}
+                    {lic.id}
                   </code>
                 </TableCell>
                 <TableCell style={{ textAlign: 'right' }}>
@@ -319,7 +318,7 @@ export const LicenseListPage: React.FC = () => {
       >
         <div className="ui-form-group">
           <label className="ui-label">Identificador Atual</label>
-          <Input value={editingLicense?.slug || ''} disabled style={{ backgroundColor: 'var(--color-bg-subtle)' }} />
+          <Input value={editingLicense?.id || ''} disabled style={{ backgroundColor: 'var(--color-bg-subtle)' }} />
         </div>
 
         <div className="ui-form-group" style={{ marginTop: '1rem' }}>
@@ -337,7 +336,7 @@ export const LicenseListPage: React.FC = () => {
 
         {editLicenseName.trim() && editingLicense && (
           <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-            <span>Novo slug gerado: </span>
+            <span>Novo id gerado: </span>
             <code style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{slugify(editLicenseName)}</code>
           </div>
         )}
@@ -365,7 +364,7 @@ export const LicenseListPage: React.FC = () => {
         isOpen={!!licenseToDelete}
         onClose={() => setLicenseToDelete(null)}
         title="Excluir Licença"
-        description={`Deseja realmente remover permanentemente a licença "${licenseToDelete?.name}" (${licenseToDelete?.slug}) do sistema? Esta ação é irreversível.`}
+        description={`Deseja realmente remover permanentemente a licença "${licenseToDelete?.name}" do sistema? Esta ação é irreversível.`}
         confirmText={isSubmitting ? 'Excluindo...' : 'Confirmar Exclusão'}
         confirmVariant="destructive"
         onConfirm={handleDelete}

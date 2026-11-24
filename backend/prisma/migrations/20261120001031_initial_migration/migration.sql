@@ -93,7 +93,7 @@ CREATE TABLE "Vehicles" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Vehicles_plate_length" CHECK (LENGTH("plate") = 8),
+    CONSTRAINT "Vehicles_plate_length" CHECK (LENGTH("plate") = 7),
     CONSTRAINT "Vehicles_pkey" PRIMARY KEY ("id")
 );
 

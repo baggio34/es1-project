@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import type { Order, OrderFormData, OrderStatus } from '../../models/order.ts'
+import type { OrderDetailed } from '../../../../sdk/src/models/order.ts'
+import type { CreateOrderRequest } from '../../../../sdk/src/dtos/order.dto.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
-import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
 import { useLicense } from '../../view_models/useLicense.ts'
 import { maskCpfCnpj } from '../../utils/formatters.tsx'
 
 export interface OrderFormPageProps {
-  initialOrder?: Order | null
-  onSave: (data: OrderFormData) => Promise<void>
+  initialOrder?: OrderDetailed | null
+  onSave: (data: CreateOrderRequest) => Promise<void>
   onCancel: () => void
 }
 
@@ -28,13 +28,9 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
   const [destination, setDestination] = useState(initialOrder ? initialOrder.destination : '')
   const [weight, setWeight] = useState<number | string>(initialOrder ? initialOrder.weight : '')
   const [volume, setVolume] = useState<number | string>(initialOrder ? initialOrder.volume : '')
-  const [value, setValue] = useState<number | string>(initialOrder ? initialOrder.value : '')
-  const [shipmentPrice, setShipmentPrice] = useState<number | string>(initialOrder ? initialOrder.shipmentPrice : '')
   const [requiredLicenses, setRequiredLicenses] = useState<string[]>(
-    initialOrder && initialOrder.licenses ? initialOrder.licenses : []
+    initialOrder ? initialOrder.licenses.map((l) => l.id) : []
   )
-  const [status, setStatus] = useState<OrderStatus>(initialOrder ? initialOrder.status : 'pendingApproval')
-  const [reason, setReason] = useState<string>(initialOrder && (initialOrder as any).status === 'rejected' ? (initialOrder as any).reason || '' : '')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -69,9 +65,6 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
     if (!destination.trim()) newErrors.destination = 'O endereço de destino é obrigatório.'
     if (Number(weight) <= 0 || isNaN(Number(weight))) newErrors.weight = 'O peso deve ser maior que zero.'
     if (Number(volume) <= 0 || isNaN(Number(volume))) newErrors.volume = 'O volume deve ser maior que zero.'
-    if (value === '' || isNaN(Number(value)) || Number(value) < 0) newErrors.value = 'Informe o valor dos itens (zero ou mais).'
-    if (shipmentPrice === '' || isNaN(Number(shipmentPrice)) || Number(shipmentPrice) < 0) newErrors.shipmentPrice = 'Informe o preço do frete (zero ou mais).'
-    if (status === 'rejected' && !reason?.trim()) newErrors.reason = 'Informe o motivo da rejeição.'
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -95,11 +88,7 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
         destination: destination.trim(),
         weight: Number(weight),
         volume: Number(volume),
-        value: Number(value),
-        shipmentPrice: Number(shipmentPrice),
-        licenses: finalLicenses,
-        ...(isEditing ? { status } : {}),
-        ...(isEditing && status === 'rejected' ? { reason: reason.trim() } : {}),
+        licenseIds: finalLicenses,
       })
     } catch (err: any) {
       setApiError(err.message || 'Erro ao salvar o pedido. Tente novamente.')
@@ -282,56 +271,6 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="order-value" required className="text-sm font-semibold text-slate-700">
-                  Valor dos Itens (R$)
-                </Label>
-                <Input
-                  autoComplete='off'
-                  id="order-value"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Ex: 12500.00"
-                  value={value}
-                  disabled={isSubmitting}
-                  onChange={(e) => {
-                    setValue(e.target.value)
-                    if (errors.value) setErrors((p) => ({ ...p, value: '' }))
-                  }}
-                  error={errors.value}
-                />
-                {errors.value && (
-                  <span className="text-xs font-medium text-red-600">{errors.value}</span>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="order-shipment-price" required className="text-sm font-semibold text-slate-700">
-                  Preço do Frete (R$)
-                </Label>
-                <Input
-                  autoComplete='off'
-                  id="order-shipment-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Ex: 850.00"
-                  value={shipmentPrice}
-                  disabled={isSubmitting}
-                  onChange={(e) => {
-                    setShipmentPrice(e.target.value)
-                    if (errors.shipmentPrice) setErrors((p) => ({ ...p, shipmentPrice: '' }))
-                  }}
-                  error={errors.shipmentPrice}
-                />
-                {errors.shipmentPrice && (
-                  <span className="text-xs font-medium text-red-600">{errors.shipmentPrice}</span>
-                )}
-              </div>
-            </div>
-
             {/* Licenças Requeridas */}
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
@@ -341,13 +280,13 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                 Selecione as licenças especiais que o motorista deve possuir para transportar esta carga.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
-                {requiredLicenses.map((license) => (
-                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
-                    {license}
+                {requiredLicenses.map((id) => (
+                  <Badge key={id} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                    {dbLicenses.find((l) => l.id === id)?.name ?? id}
                     <X
                       size={12}
                       style={{ opacity: 0.7 }}
-                      onClick={() => handleRemoveLicense(license)}
+                      onClick={() => handleRemoveLicense(id)}
                     />
                   </Badge>
                 ))}
@@ -374,8 +313,8 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                   }}
                 >
                   <option value="" disabled>Selecione uma licença para adicionar...</option>
-                  {dbLicenses.filter((l) => !requiredLicenses.includes(l.name)).map((l) => (
-                    <option key={l.slug} value={l.name}>{l.name}</option>
+                  {dbLicenses.filter((l) => !requiredLicenses.includes(l.id)).map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
                 <Button
@@ -396,54 +335,6 @@ export const OrderFormPage: React.FC<OrderFormPageProps> = ({
                 </Button>
               </div>
             </div>
-
-            {isEditing && (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="order-status" className="text-sm font-semibold text-slate-700">
-                  Situação do Pedido
-                </Label>
-                <Select
-                  id="order-status"
-                  value={status}
-                  disabled={isSubmitting}
-                  onChange={(e) => setStatus(e.target.value as OrderStatus)}
-                  options={[
-                    { value: 'pendingApproval', label: 'Pendente de Aprovação' },
-                    { value: 'waitingPayment', label: 'Aguardando Pagamento' },
-                    { value: 'inPreparation', label: 'Em Preparação' },
-                    { value: 'loaded', label: 'Carregado' },
-                    { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-                    { value: 'onRoute', label: 'Em Rota' },
-                    { value: 'arrived', label: 'Entregue' },
-                    { value: 'accident', label: 'Acidente' },
-                    { value: 'resolvedAccident', label: 'Acidente Resolvido' },
-                    { value: 'rejected', label: 'Rejeitado' },
-                    { value: 'cancelled', label: 'Cancelado' },
-                  ]}
-                />
-                {status === 'rejected' && (
-                  <div className="flex flex-col gap-2 mt-4">
-                    <Label htmlFor="order-reason" required className="text-sm font-semibold text-slate-700">
-                      Motivo da Rejeição
-                    </Label>
-                    <Input
-                      id="order-reason"
-                      placeholder="Descreva o motivo da rejeição"
-                      value={reason}
-                      disabled={isSubmitting}
-                      onChange={(e) => {
-                        setReason(e.target.value)
-                        if (errors.reason) setErrors((p) => ({ ...p, reason: '' }))
-                      }}
-                      error={errors.reason}
-                    />
-                    {errors.reason && (
-                      <span className="text-xs font-medium text-red-600">{errors.reason}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
 
             {isEditing && initialOrder && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">

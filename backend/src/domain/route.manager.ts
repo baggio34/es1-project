@@ -16,13 +16,10 @@ type LoadOrderError =
   | 'driverVehicleMissmatch'
   | 'vehicleOrDriverMissingLicense'
 
-/**
- * Gerencia as rotas do sistema.
- */
 export class RouteManager {
   private static instance: RouteManager | null
   private prisma: PrismaClient
-  
+
   private constructor() {
     this.prisma = PrismaContext.getClient()
   }
@@ -34,15 +31,12 @@ export class RouteManager {
     return this.instance
   }
 
-  /**
-   * Retorna uma rota dado seu `id`.
-   */
   public async get(id: string): Promise<RouteWithOrders | null> {
     const route = await this.prisma.route.findFirst({
       where: { id },
       include: {
-        createdBy: { select: { username: true, name: true, id: true, } },
-        dispatchApprovedBy: { select: { username: true, name: true, id: true, } },
+        createdBy: { select: { username: true, name: true, id: true } },
+        dispatchApprovedBy: { select: { username: true, name: true, id: true } },
         vehicle: { select: { id: true, color: true, model: true, plate: true } },
         driver: { select: { id: true, name: true, username: true } },
         orders: {
@@ -68,12 +62,9 @@ export class RouteManager {
     return await this.prisma.route.findFirst({ where: { id } })
   }
 
-  /**
-   * Retorna todas as rotas. Permite filtrar por um motorista
-   */
   public async getAll(driverUsername?: string): Promise<RoutePreview[]> {
     return await this.prisma.route.findMany({
-      where: { driver: { username: driverUsername } },
+      where: driverUsername ? { driver: { username: driverUsername } } : undefined,
       select: {
         id: true,
         status: true,
@@ -83,42 +74,31 @@ export class RouteManager {
     })
   }
 
-  /**
-   * Atribui um pedido a um motorista e um veículo.
-   * @returns O Id da rota a qual o pedido é atribuido.
-   */
   public async loadOrder(operator: User, order: Order, driver: User, vehicle: Vehicle): Promise<Result<string, LoadOrderError>> {
     assert(isOperator(operator) && isDriver(driver))
     assert(operator.isActive && driver.isActive && vehicle.isActive)
-    
-    // Precisam estar em estados válidos.
+
     if (order.status != 'IN_PREPARATION') return Err('orderNotInPreparation')
     if (driver.transportState == 'ON_ROUTE' || vehicle.transportState == 'ON_ROUTE') {
       return Err('vehicleOrDriverOnRoute')
     }
     if (driver.transportState != vehicle.transportState) return Err('vehicleAndDriverInDifferentStatuses')
 
-    // Precisam ter as licenças necessárias.
     const missingLicenses = await this.prisma.orderToLicense.count({
       where: {
         OR: [
-          // Licença que o pedido requer, mas o motorista não tem
           {
             orderId: order.id,
             license: {
-              drivers: { none: { driverId: driver.id} }
+              drivers: { none: { driverId: driver.id } }
             }
           },
-
-          // Licença que o pedido requer, mas o veículo não tem
           {
             orderId: order.id,
             license: {
-              vehicles: { none: { vehicleId: vehicle.id} }
+              vehicles: { none: { vehicleId: vehicle.id } }
             }
           },
-
-          // Licença que o veículo requer, mas o motorista não tem
           {
             orderId: order.id,
             license: {
@@ -137,220 +117,229 @@ export class RouteManager {
     })
     if (missingLicenses != 0) return Err('vehicleOrDriverMissingLicense')
 
-    var routeIndex = 0
-    var routeId: string
-
-    // Pode atribuir a um motorista e veículo livres ou já ocupados.
     if (driver.transportState == 'WAITING_OPERATOR_AUTHORIZATION' && vehicle.transportState == 'WAITING_OPERATOR_AUTHORIZATION') {
-      if (vehicle.routeId != driver.routeId) return Err('driverVehicleMissmatch')
+      if (vehicle.routeId != driver.routeId || !driver.routeId) return Err('driverVehicleMissmatch')
 
-      const orderIndexes = (await this.prisma.order.findMany({
-        where: { routeId: driver.routeId }
-      })).map(o => o.routeIndex!)
+      const existingRouteId = driver.routeId
+      const routeId = await this.prisma.$transaction(async (tx) => {
+        const orderIndexes = (await tx.order.findMany({
+          where: { routeId: existingRouteId }
+        })).map(o => o.routeIndex ?? -1)
 
-      routeIndex = Math.max(...orderIndexes) + 1
-      routeId = driver.routeId!
+        const routeIndex = orderIndexes.length > 0 ? Math.max(...orderIndexes) + 1 : 0
 
-    } else {
-      // Caso ambos estejam livres deve criar uma nova rota.
-      const route = await this.prisma.route.create({
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            routeId: existingRouteId,
+            routeIndex,
+            status: "LOADED",
+            loadedById: operator.id,
+            loadedOn: new Date(),
+          }
+        })
+
+        return existingRouteId
+      })
+
+      return Ok(routeId)
+    }
+
+    const routeId = await this.prisma.$transaction(async (tx) => {
+      const route = await tx.route.create({
         data: {
           driverId: driver.id,
           vehicleId: vehicle.id,
           createdById: operator.id,
-          orders: {
-            connect: { id: order.id }
-          }
         }
       })
-      routeId = route.id
 
-      await this.prisma.user.update({
+      await tx.user.update({
         where: { id: driver.id },
         data: {
           transportState: "WAITING_OPERATOR_AUTHORIZATION",
-          routeId,
+          routeId: route.id,
         }
       })
-      await this.prisma.vehicle.update({
+
+      await tx.vehicle.update({
         where: { id: vehicle.id },
         data: {
           transportState: "WAITING_OPERATOR_AUTHORIZATION",
-          routeId,
+          routeId: route.id,
         }
       })
-    }
 
-    await this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        routeId: driver.routeId!,
-        routeIndex,
-        status: "LOADED",
-        loadedById: operator.id,
-        loadedOn: new Date(),
-      }
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          routeId: route.id,
+          routeIndex: 0,
+          status: "LOADED",
+          loadedById: operator.id,
+          loadedOn: new Date(),
+        }
+      })
+
+      return route.id
     })
 
     return Ok(routeId)
   }
 
-  /**
-   * Desatribui um pedido de sua respectiva rota.
-   */
   public async unloadOrder(order: Order): Promise<Result<"", "orderNotInLoadedStatus">> {
-    if (order.status != 'LOADED') return Err('orderNotInLoadedStatus')
-    const ordersInRoute = await this.prisma.order.count({ where: { routeId: order.routeId! } })
-    const route = await this.prisma.route.findFirstOrThrow({ where: { id: order.routeId! } })
+    if (order.status != 'LOADED' || !order.routeId) return Err('orderNotInLoadedStatus')
+    const currentRouteId = order.routeId
 
-    // Se for o único pedido da rota, deve deletar a rota e liberar o motorista e veículo.
-    if (ordersInRoute == 1) {
-      await this.prisma.user.update({
-        where: { id: route.driverId },
+    await this.prisma.$transaction(async (tx) => {
+      const ordersInRoute = await tx.order.count({ where: { routeId: currentRouteId } })
+      const route = await tx.route.findFirstOrThrow({ where: { id: currentRouteId } })
+
+      await tx.order.update({
+        where: { id: order.id },
         data: {
-          transportState: "FREE",
+          status: "IN_PREPARATION",
           routeId: null,
+          routeIndex: null,
         }
       })
-      await this.prisma.vehicle.update({
-        where: { id: route.vehicleId },
-        data: {
-          transportState: "FREE",
-          routeId: null,
-        }
-      })
-      await this.prisma.route.delete({ where: { id: route.id }})
 
-    }
-
-    await this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: "IN_PREPARATION",
-        routeId: null,
+      if (ordersInRoute == 1) {
+        await tx.user.update({
+          where: { id: route.driverId },
+          data: {
+            transportState: "FREE",
+            routeId: null,
+          }
+        })
+        await tx.vehicle.update({
+          where: { id: route.vehicleId },
+          data: {
+            transportState: "FREE",
+            routeId: null,
+          }
+        })
+        await tx.route.delete({ where: { id: route.id } })
       }
     })
 
     return Ok('')
   }
 
-  /**
-   * Marca a rota como autorizada para dispachar.
-   */
   public async authorizeDispatch(operator: User, route: Route): Promise<Result<"", "routeNotWaitingOperator">> {
     assert(operator.isActive && isOperator(operator))
     if (route.status != 'WAITING_OPERATOR_AUTHORIZATION') return Err('routeNotWaitingOperator')
 
-    await this.prisma.order.updateMany({
-      where: { routeId: route.id },
-      data: { status: "WAITING_DISPATCH" }
-    })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.updateMany({
+        where: { routeId: route.id },
+        data: { status: "WAITING_DISPATCH" }
+      })
 
-    await this.prisma.user.update({
-      where: { id: route.driverId },
-      data: { transportState: "WAITING_DRIVER_DISPATCH" }
-    })
+      await tx.user.update({
+        where: { id: route.driverId },
+        data: { transportState: "WAITING_DRIVER_DISPATCH" }
+      })
 
-    await this.prisma.vehicle.update({
-      where: { id: route.vehicleId },
-      data: { transportState: "WAITING_DRIVER_DISPATCH" }
-    })
+      await tx.vehicle.update({
+        where: { id: route.vehicleId },
+        data: { transportState: "WAITING_DRIVER_DISPATCH" }
+      })
 
-    await this.prisma.route.update({
-      where: { id: route.id },
-      data: {
-        status: "WAITING_DRIVER_DISPATCH",
-        dispatchApprovedById: operator.id,
-        dispatchApprovedOn: new Date(),
-      }
+      await tx.route.update({
+        where: { id: route.id },
+        data: {
+          status: "WAITING_DRIVER_DISPATCH",
+          dispatchApprovedById: operator.id,
+          dispatchApprovedOn: new Date(),
+        }
+      })
     })
 
     return Ok('')
   }
 
-  /**
-   * Desmarca a rota como autorizada para dispachar.
-   */
   public async unauthorizeDispatch(route: Route): Promise<Result<'', 'routeNotAuthorizedForDispatch'>> {
     if (route.status != 'WAITING_DRIVER_DISPATCH') return Err('routeNotAuthorizedForDispatch')
 
-    await this.prisma.order.updateMany({
-      where: { routeId: route.id },
-      data: { status: "LOADED" }
-    })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.updateMany({
+        where: { routeId: route.id },
+        data: { status: "LOADED" }
+      })
 
-    await this.prisma.user.update({
-      where: { id: route.driverId },
-      data: { transportState: "WAITING_OPERATOR_AUTHORIZATION" }
-    })
+      await tx.user.update({
+        where: { id: route.driverId },
+        data: { transportState: "WAITING_OPERATOR_AUTHORIZATION" }
+      })
 
-    await this.prisma.vehicle.update({
-      where: { id: route.vehicleId },
-      data: { transportState: "WAITING_OPERATOR_AUTHORIZATION" }
-    })
+      await tx.vehicle.update({
+        where: { id: route.vehicleId },
+        data: { transportState: "WAITING_OPERATOR_AUTHORIZATION" }
+      })
 
-    await this.prisma.route.update({
-      where: { id: route.id },
-      data: {
-        status: "WAITING_OPERATOR_AUTHORIZATION",
-        dispatchApprovedById: null,
-        dispatchApprovedOn: null,
-      }
+      await tx.route.update({
+        where: { id: route.id },
+        data: {
+          status: "WAITING_OPERATOR_AUTHORIZATION",
+          dispatchApprovedById: null,
+          dispatchApprovedOn: null,
+        }
+      })
     })
 
     return Ok('')
   }
 
-  /**
-   * Confirma que o motorista começou o trajeto.
-   */
   public async confirmDispatch(driver: User, route: Route): Promise<Result<"", "notAuthorized" | "driverNotAuthorized">> {
     if (driver.id != route.driverId) return Err('notAuthorized')
     if (route.status != 'WAITING_DRIVER_DISPATCH') return Err('driverNotAuthorized')
 
-    await this.prisma.order.updateMany({
-      where: { routeId: route.id },
-      data: { status: "ON_ROUTE" }
-    })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.updateMany({
+        where: { routeId: route.id },
+        data: { status: "ON_ROUTE" }
+      })
 
-    await this.prisma.user.update({
-      where: { id: route.driverId },
-      data: { transportState: "ON_ROUTE" }
-    })
+      await tx.user.update({
+        where: { id: route.driverId },
+        data: { transportState: "ON_ROUTE" }
+      })
 
-    await this.prisma.vehicle.update({
-      where: { id: route.vehicleId },
-      data: { transportState: "ON_ROUTE" }
-    })
+      await tx.vehicle.update({
+        where: { id: route.vehicleId },
+        data: { transportState: "ON_ROUTE" }
+      })
 
-    await this.prisma.route.update({
-      where: { id: route.id },
-      data: {
-        status: "ON_COURSE",
-        routeStartedOn: new Date(),
-      }
+      await tx.route.update({
+        where: { id: route.id },
+        data: {
+          status: "ON_COURSE",
+          routeStartedOn: new Date(),
+        }
+      })
     })
 
     return Ok('')
   }
 
   private hasLicenses(driverLs: Licenses, vehicleLs: Licenses, orderLs: Licenses): boolean {
-    for (const license of orderLs) {
-      if (!vehicleLs.includes(license) || !driverLs.includes(license)) {
+    const driverSet = new Set(driverLs.map(l => l.licenseId))
+    const vehicleSet = new Set(vehicleLs.map(l => l.licenseId))
+
+    for (const { licenseId } of orderLs) {
+      if (!vehicleSet.has(licenseId) || !driverSet.has(licenseId)) {
         return false
       }
     }
 
-    for (const license of vehicleLs) {
-      if (!driverLs.includes(license)) return false
+    for (const { licenseId } of vehicleLs) {
+      if (!driverSet.has(licenseId)) return false
     }
 
     return true
   }
 
-  /*
-   * Retorna as possíveis combinações de motorista e veículo.
-   */
   public async routeSuggestions(order: Order): Promise<Result<GetRouteSuggestionsReply, 'orderNotInPreparation'>> {
     if (order.status != "IN_PREPARATION") return Err('orderNotInPreparation')
 
@@ -360,7 +349,7 @@ export class RouteManager {
     })
 
     const freeDrivers = await this.prisma.user.findMany({
-      where: { transportState: "FREE", isActive: true },
+      where: { transportState: "FREE", isActive: true, role: "DRIVER" },
       include: { licenses: { select: { licenseId: true } } },
     })
 
@@ -397,16 +386,34 @@ export class RouteManager {
 
     existingRoutes.forEach(r => {
       if (this.hasLicenses(r.driver.licenses, r.vehicle.licenses, orderLicenses)) {
-        suggestions.set(r.vehicleId, r.driver)
-        vehicles.set(r.vehicleId, r.vehicle)
+        suggestions.set(r.vehicleId, {
+          id: r.driver.id,
+          name: r.driver.name,
+          username: r.driver.username,
+        })
+        vehicles.set(r.vehicleId, {
+          id: r.vehicle.id,
+          model: r.vehicle.model,
+          color: r.vehicle.color,
+          plate: r.vehicle.plate,
+        })
       }
     })
 
     freeDrivers.forEach(driver => {
       freeVehicles.forEach(vehicle => {
         if (this.hasLicenses(driver.licenses, vehicle.licenses, orderLicenses)) {
-          suggestions.set(vehicle.id, driver)
-          vehicles.set(vehicle.id, vehicle)
+          suggestions.set(vehicle.id, {
+            id: driver.id,
+            name: driver.name,
+            username: driver.username,
+          })
+          vehicles.set(vehicle.id, {
+            id: vehicle.id,
+            model: vehicle.model,
+            color: vehicle.color,
+            plate: vehicle.plate,
+          })
         }
       })
     })

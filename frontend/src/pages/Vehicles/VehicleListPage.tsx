@@ -1,16 +1,17 @@
 import React, { useState } from 'react'
-import type { Vehicle } from '../../models/vehicle.ts'
+import type { VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
+import type { TransportStateEnum } from '../../../../sdk/src/models/transport_state.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
-import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Search, Eye, Pencil, RefreshCw } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface VehicleListPageProps {
-  vehicles: Vehicle[]
+  vehicles: VehiclePreview[]
   routes?: any[]
   drivers?: any[]
   onViewDetails: (id: string) => void
@@ -30,19 +31,19 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
   onDelete,
   onReload,
 }) => {
-  // Puxa o utilizador atual e define se tem permissão de edição
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
 
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'all' | TransportStateEnum>('all')
+  const [vehicleToDelete, setVehicleToDelete] = useState<VehiclePreview | null>(null)
 
   const filteredVehicles = vehicles.filter((v) => {
     const matchesSearch =
       v.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.plate.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || v.status === statusFilter
+      v.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.color.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || v.transportState === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -59,7 +60,6 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
           <Button variant="outline" icon={<RefreshCw size={16} />} onClick={onReload}>
             Recarregar
           </Button>
-          {/* Oculta a criação de novos veículos para operadores */}
           {canEdit && (
             <Button icon={<Plus size={16} />} onClick={onCreate}>
               Novo Veículo
@@ -84,16 +84,15 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             Status:
           </span>
           <Select
-            style={{ width: '200px' }}
+            style={{ width: '240px' }}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | TransportStateEnum)}
             options={[
               { value: 'all', label: 'Todos os Status' },
-              { value: 'free', label: 'Disponível' },
-              { value: 'waitingOperatorOrder', label: 'Em Montagem de Rota' },
-              { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-              { value: 'readyToDispatch', label: 'Aguardando Saída' },
-              { value: 'onRoute', label: 'Em Rota' },
+              { value: 'FREE', label: 'Disponível' },
+              { value: 'WAITING_OPERATOR_AUTHORIZATION', label: 'Aguardando Autorização' },
+              { value: 'WAITING_DRIVER_DISPATCH', label: 'Aguardando Despacho' },
+              { value: 'ON_ROUTE', label: 'Em Rota' },
             ]}
           />
         </div>
@@ -107,7 +106,8 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             <TableHead className="w-[100px]">Cor</TableHead>
             <TableHead className="min-w-[150px]">Capacidade de Carga</TableHead>
             <TableHead className="min-w-[130px]">Volume Interno</TableHead>
-            <TableHead className="min-w-[140px]">Status</TableHead>
+            <TableHead className="w-[110px]">Situação</TableHead>
+            <TableHead className="min-w-[140px]">Operação</TableHead>
             <TableHead className="min-w-[160px]">Condutor Vinculado</TableHead>
             <TableHead className="w-[110px]" style={{ textAlign: 'right' }}>Ações</TableHead>
           </TableRow>
@@ -115,7 +115,7 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
         <TableBody>
           {filteredVehicles.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} style={{ textAlign: 'center', padding: '2.5rem' }}>
+              <TableCell colSpan={9} style={{ textAlign: 'center', padding: '2.5rem' }}>
                 <span style={{ color: 'var(--color-text-muted)' }}>
                   Nenhum veículo encontrado com os filtros selecionados.
                 </span>
@@ -123,12 +123,21 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
             </TableRow>
           ) : (
             filteredVehicles.map((vehicle) => {
-              const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
-              const driver = drivers?.find(d => d.username === activeRoute?.driverId)
-              const hasDriver = !!driver
+              const activeRoute =
+                vehicle.transportState !== 'FREE'
+                  ? routes?.find(
+                      (r) =>
+                        (r.vehicle?.plate === vehicle.plate || r.vehiclePlate === vehicle.plate) &&
+                        r.status !== 'COMPLETED' &&
+                        r.status !== 'completed'
+                    )
+                  : undefined
+              const driver =
+                activeRoute?.driver ??
+                drivers?.find((d) => d.username === activeRoute?.driverId || d.id === activeRoute?.driverId)
 
               return (
-                <TableRow key={vehicle.plate}>
+                <TableRow key={vehicle.plate} style={{ opacity: vehicle.isActive ? 1 : 0.65 }}>
                   <TableCell style={{ fontWeight: 600 }}>{vehicle.model}</TableCell>
                   <TableCell>
                     <span
@@ -147,10 +156,39 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                   <TableCell>{vehicle.color}</TableCell>
                   <TableCell>{vehicle.maxLoad.toLocaleString('pt-BR')} kg</TableCell>
                   <TableCell>{vehicle.internalVolume} m³</TableCell>
-                  <TableCell>{getVehicleStatusBadge(vehicle.status)}</TableCell>
                   <TableCell>
-                    {hasDriver ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.375rem',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: vehicle.isActive ? 'var(--color-success-text)' : 'var(--color-danger-text)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: vehicle.isActive ? 'var(--color-success-button)' : 'var(--color-danger-button)',
+                        }}
+                      />
+                      {vehicle.isActive ? 'Ativo' : 'Desativado'}
+                    </span>
+                  </TableCell>
+                  <TableCell>{getVehicleStatusBadge(vehicle.transportState)}</TableCell>
+                  <TableCell>
+                    {driver ? (
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.8125rem',
+                          color: 'var(--color-primary)',
+                          fontWeight: 500,
+                        }}
+                      >
                         @{driver.username}
                       </span>
                     ) : (
@@ -166,7 +204,6 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                         title="Ver Detalhes"
                         onClick={() => onViewDetails(vehicle.plate)}
                       />
-                      {/* Oculta as opções de edição e exclusão para operadores logísticos */}
                       {canEdit && (
                         <>
                           <Button
@@ -175,13 +212,6 @@ export const VehicleListPage: React.FC<VehicleListPageProps> = ({
                             icon={<Pencil size={15} />}
                             title="Editar Veículo"
                             onClick={() => onEdit(vehicle.plate)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Trash2 size={15} color="var(--color-danger-button)" />}
-                            title="Excluir Veículo"
-                            onClick={() => setVehicleToDelete(vehicle)}
                           />
                         </>
                       )}

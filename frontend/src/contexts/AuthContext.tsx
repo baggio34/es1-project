@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { userApi } from '../api/userApi'
-import type { LoginReply } from '../models/user'
+import type { LoginReply } from '../../../sdk/src/dtos/auth.dto'
 import { ApiError } from '../api/client'
 
 interface AuthContextType {

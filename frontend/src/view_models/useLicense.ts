@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react'
 import { licenseApi } from '../api/licenseApi'
-import type { LicenseGetReply, LicenseCreationPayload } from '../models/license'
+import type { CreateLicenseRequest, UpdateLicenseRequest, GetLicensesReply } from '../../../sdk/src/dtos/license.dto.ts'
 import { ApiError } from '../api/client'
 
 export function useLicense() {
-  const [licenses, setLicenses] = useState<LicenseGetReply>([])
+  const [licenses, setLicenses] = useState<GetLicensesReply>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,18 +20,18 @@ export function useLicense() {
     }
   }, [])
 
-  const createLicense = async (data: LicenseCreationPayload) => {
+  const createLicense = async (data: CreateLicenseRequest) => {
     await licenseApi.create(data)
     await loadLicenses()
   }
 
-  const updateLicense = async (slug: string, data: LicenseCreationPayload) => {
-    await licenseApi.update(slug, data)
+  const updateLicense = async (id: string, data: UpdateLicenseRequest) => {
+    await licenseApi.update(id, data)
     await loadLicenses()
   }
 
-  const deleteLicense = async (slug: string) => {
-    await licenseApi.delete(slug)
+  const deleteLicense = async (id: string) => {
+    await licenseApi.delete(id)
     await loadLicenses()
   }
 

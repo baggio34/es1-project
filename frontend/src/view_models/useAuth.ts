@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { userApi } from '../api/userApi'
-import type { LoginPayload } from '../models/user'
+import type { LoginRequest } from '../../../sdk/src/dtos/auth.dto.ts'
 import { ApiError } from '../api/client'
 
 export function useAuth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const login = async (data: LoginPayload) => {
+  const login = async (data: LoginRequest) => {
     try {
       setLoading(true)
       setError(null)

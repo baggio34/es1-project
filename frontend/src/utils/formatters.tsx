@@ -1,9 +1,9 @@
 import React from 'react'
-import type { DriverStatus } from '../models/driver.ts'
-import type { VehicleStatus } from '../models/vehicle.ts'
-import type { OrderStatus } from '../models/order.ts'
-import type { RouteStatus } from '../models/route.ts'
-import type { UserRole } from '../models/user.ts'
+
+import type { TransportStateEnum } from '../../../sdk/src/models/transport_state.ts'
+import type { OrderStatusEnum } from '../../../sdk/src/models/order.ts'
+import type { RouteStatusEnum } from '../../../sdk/src/models/route.ts'
+import type { RoleEnum } from '../../../sdk/src/models/user.ts'
 import { Badge } from '../components/ui/badge.tsx'
 
 export const formatReg = (reg: string): string => {
@@ -34,83 +34,87 @@ export const formatCurrency = (val: number): string => {
   return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export const getDriverStatusBadge = (status: DriverStatus): React.ReactElement => {
+export function getDriverStatusBadge(status: TransportStateEnum) {
   switch (status) {
-    case 'free':
+    case 'FREE':
       return <Badge variant="success">Disponível</Badge>
-    case 'waitingDispatch':
+    case 'WAITING_OPERATOR_AUTHORIZATION':
+      return <Badge variant="warning">Em Montagem de Rota</Badge>
+    case 'WAITING_DRIVER_DISPATCH':
       return <Badge variant="warning">Aguardando Despacho</Badge>
-    case 'onRoute':
+    case 'ON_ROUTE':
+      return <Badge variant="primary">Em Rota</Badge>
+  }
+}
+
+export function getVehicleStatusBadge(status: TransportStateEnum) {
+  switch (status) {
+    case 'FREE':
+      return <Badge variant="success">Disponível</Badge>
+    case 'WAITING_OPERATOR_AUTHORIZATION':
+      return <Badge variant="warning">Aguardando Autorização</Badge>
+    case 'WAITING_DRIVER_DISPATCH':
+      return <Badge variant="warning">Aguardando Despacho</Badge>
+    case 'ON_ROUTE':
       return <Badge variant="primary">Em Rota</Badge>
     default:
       return <Badge variant="secondary">{status}</Badge>
   }
 }
 
-export const getVehicleStatusBadge = (status: VehicleStatus): React.ReactElement => {
+export const getOrderStatusBadge = (status: OrderStatusEnum): React.ReactElement => {
   switch (status) {
-    case 'free':
-      return <Badge variant="success">Disponível</Badge>
-    case 'waitingDispatch':
-      return <Badge variant="warning">Aguardando Despacho</Badge>
-    case 'onRoute':
-      return <Badge variant="primary">Em Rota</Badge>
-    default:
-      return <Badge variant="secondary">{status}</Badge>
-  }
-}
-
-export const getOrderStatusBadge = (status: OrderStatus): React.ReactElement => {
-  switch (status) {
-    case 'pendingApproval':
+    case 'WAITING_APPROVAL':
       return <Badge variant="warning">Pendente de Aprovação</Badge>
-    case 'waitingPayment':
+    case 'WAITING_PAYMENT':
       return <Badge variant="secondary">Aguardando Pagamento</Badge>
-    case 'inPreparation':
+    case 'IN_PREPARATION':
       return <Badge variant="secondary">Em Preparação</Badge>
-    case 'loaded':
+    case 'LOADED':
       return <Badge variant="primary">Carregado</Badge>
-    case 'waitingDispatch':
+    case 'WAITING_DISPATCH':
       return <Badge variant="primary">Aguardando Despacho</Badge>
-    case 'onRoute':
+    case 'ON_ROUTE':
       return <Badge variant="primary">Em Rota</Badge>
-    case 'arrived':
+    case 'ARRIVED':
       return <Badge variant="success">Entregue</Badge>
-    case 'rejected':
+    case 'REJECTED':
       return <Badge variant="danger">Rejeitado</Badge>
-    case 'accident':
+    case 'ACCIDENT':
       return <Badge variant="danger">Acidente Reportado</Badge>
-    case 'resolvedAccident':
+    case 'RESOLVED_ACCIDENT':
       return <Badge variant="success">Acidente Resolvido</Badge>
-    case 'cancelled':
+    case 'CANCELLED':
       return <Badge variant="danger">Cancelado</Badge>
     default:
       return <Badge variant="secondary">{status}</Badge>
   }
 }
 
-export const getRouteStatusBadge = (status: RouteStatus): React.ReactElement => {
+export function getRouteStatusBadge(status: RouteStatusEnum) {
   switch (status) {
-    case 'waitingDispatch':
-      return <Badge variant="warning">Aguardando Despacho</Badge>
-    case 'onCourse':
+    case 'WAITING_OPERATOR_AUTHORIZATION':
+      return <Badge variant="warning">Em Montagem</Badge>
+    case 'WAITING_DRIVER_DISPATCH':
+      return <Badge variant="secondary">Aguardando Despacho</Badge>
+    case 'ON_COURSE':
       return <Badge variant="primary">Em Curso</Badge>
-    case 'completed':
+    case 'COMPLETED':
       return <Badge variant="success">Concluída</Badge>
-    default:
-      return <Badge variant="secondary">{status}</Badge>
   }
 }
 
-export const getUserRoleBadge = (role: UserRole): React.ReactElement => {
+export const getUserRoleBadge = (role: RoleEnum): React.ReactElement => {
   switch (role) {
-    case 'Admin':
+    case 'ADMIN':
       return <Badge variant="danger">Administrador</Badge>
-    case 'Manager':
+    case 'MANAGER':
       return <Badge variant="primary">Gerente</Badge>
-    case 'Clerk':
+    case 'OPERATOR':
+      return <Badge variant="success">Operador</Badge>
+    case 'CLERK':
       return <Badge variant="warning">Atendente</Badge>
-    case 'Driver':
+    case 'DRIVER':
       return <Badge variant="secondary">Motorista</Badge>
     default:
       return <Badge variant="secondary">{role}</Badge>

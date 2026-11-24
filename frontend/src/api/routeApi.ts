@@ -1,19 +1,19 @@
 import { apiFetch } from './client'
-import type { RouteGetReply, RoutesGetAllReply } from '../models/route'
+import type { GetRouteReply, GetRoutesReply } from '../../../sdk/src/dtos/route.dto.ts'
 
 export const routeApi = {
-  getById: (uuid: string) => 
-    apiFetch<RouteGetReply>(`/routes/${uuid}`),
-    
-  getAll: () => 
-    apiFetch<RoutesGetAllReply>('/routes'),
-    
-  authorizeDispatch: (uuid: string) => 
+  getById: (uuid: string) =>
+    apiFetch<GetRouteReply>(`/routes/${uuid}`),
+
+  getAll: () =>
+    apiFetch<GetRoutesReply>('/routes'),
+
+  authorizeDispatch: (uuid: string) =>
     apiFetch<string>(`/routes/${uuid}/authorize-dispatch`, { method: 'POST' }),
-    
-  unauthorizeDispatch: (uuid: string) => 
+
+  unauthorizeDispatch: (uuid: string) =>
     apiFetch<string>(`/routes/${uuid}/unauthorize-dispatch`, { method: 'POST' }),
-    
-  confirmDispatch: (uuid: string) => 
+
+  confirmDispatch: (uuid: string) =>
     apiFetch<string>(`/routes/${uuid}/confirm-dispatch`, { method: 'POST' }),
 }

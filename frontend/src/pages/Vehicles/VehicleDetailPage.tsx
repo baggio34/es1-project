@@ -1,5 +1,5 @@
-import React from 'react'
-import type { Vehicle } from '../../models/vehicle.ts'
+import React, { useState, useEffect } from 'react'
+import type { VehicleDetailed, VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
@@ -7,9 +7,10 @@ import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, Truck, Box, Shield, Map } from 'lucide-react'
 import { getVehicleStatusBadge } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
+import { vehicleApi } from '../../api/vehicleApi.ts'
 
 export interface VehicleDetailPageProps {
-  vehicle: Vehicle
+  vehicle: VehicleDetailed | VehiclePreview
   routes?: any[]
   drivers?: any[]
   onBack: () => void
@@ -26,17 +27,48 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
   onViewRoute,
 }) => {
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
 
-  // Cruzamento de dados blindado (Ignora se estiver livre ou se a rota já foi concluída)
-  const activeRoute = vehicle.status !== 'free' ? routes?.find(r => r.id === (vehicle as any).routeId && r.status !== 'completed') : undefined
-  const driver = drivers?.find(d => d.username === activeRoute?.driverId)
-  
+  const [detailedVehicle, setDetailedVehicle] = useState<VehicleDetailed | null>(
+    'licenses' in vehicle ? vehicle : null
+  )
+
+  useEffect(() => {
+    if ('licenses' in vehicle && Array.isArray(vehicle.licenses)) {
+      setDetailedVehicle(vehicle)
+    } else {
+      vehicleApi
+        .getByPlate(vehicle.plate)
+        .then(setDetailedVehicle)
+        .catch(console.error)
+    }
+  }, [vehicle])
+
+  const currentVehicle = detailedVehicle ?? vehicle
+  const embeddedRoute =
+    detailedVehicle && detailedVehicle.transportState !== 'FREE' ? detailedVehicle.route : undefined
+  const fallbackRoute =
+    !embeddedRoute && currentVehicle.transportState !== 'FREE'
+      ? routes?.find(
+          (r) =>
+            (r.vehicle?.plate === currentVehicle.plate || r.vehiclePlate === currentVehicle.plate) &&
+            r.status !== 'COMPLETED' &&
+            r.status !== 'completed'
+        )
+      : undefined
+  const activeRoute = embeddedRoute ?? fallbackRoute
+
+  const driver =
+    (activeRoute as any)?.driver ??
+    drivers?.find(
+      (d) => d.username === (activeRoute as any)?.driverId || d.id === (activeRoute as any)?.driverId
+    )
+
   const hasDriver = !!driver
   const driverName = driver?.name
-  const orderIds = activeRoute?.orders || activeRoute?.orderIds || []
+  const orderIds = (activeRoute as any)?.orders || (activeRoute as any)?.orderIds || []
   const routeId = activeRoute?.id
-  const requiredLicenses = (vehicle as any).licenses || []
+  const requiredLicenses = detailedVehicle?.licenses ?? []
 
   return (
     <div>
@@ -46,18 +78,18 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
             Voltar à Lista
           </Button>
           <div>
-            <h1 className="page-title">{vehicle.model}</h1>
+            <h1 className="page-title">{currentVehicle.model}</h1>
             <p className="page-description">
               Placa:{' '}
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-primary)' }}>
-                {vehicle.plate.toUpperCase()}
+                {currentVehicle.plate.toUpperCase()}
               </span>
             </p>
           </div>
         </div>
         <div className="page-actions">
           {canEdit && (
-            <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(vehicle.plate)}>
+            <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(currentVehicle.plate)}>
               Editar Ficha Técnica
             </Button>
           )}
@@ -71,40 +103,52 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
               <Truck size={18} color="var(--color-primary)" />
               <CardTitle>Especificações Técnicas</CardTitle>
             </div>
-            {getVehicleStatusBadge(vehicle.status)}
+            {getVehicleStatusBadge(currentVehicle.transportState)}
           </CardHeader>
           <CardContent>
             <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="detail-item">
                 <span className="detail-label">Modelo</span>
-                <span className="detail-value">{vehicle.model}</span>
+                <span className="detail-value">{currentVehicle.model}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Placa Mercosul</span>
-                <span className="detail-value detail-value-mono">{vehicle.plate.toUpperCase()}</span>
+                <span className="detail-value detail-value-mono">{currentVehicle.plate.toUpperCase()}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Cor</span>
-                <span className="detail-value">{vehicle.color}</span>
+                <span className="detail-value">{currentVehicle.color}</span>
+              </div>
+              <div className="detail-item">
+                <span className="detail-label">Status na Frota</span>
+                <span
+                  className="detail-value"
+                  style={{
+                    color: currentVehicle.isActive ? 'var(--color-success-text)' : 'var(--color-danger-text)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {currentVehicle.isActive ? 'Ativo' : 'Desativado'}
+                </span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Carga Máxima Suportada</span>
                 <span className="detail-value" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                  {vehicle.maxLoad.toLocaleString('pt-BR')} kg
+                  {currentVehicle.maxLoad.toLocaleString('pt-BR')} kg
                 </span>
               </div>
-              <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+              <div className="detail-item">
                 <span className="detail-label">Volume Interno Útil</span>
                 <span className="detail-value" style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                  {vehicle.internalVolume} m³
+                  {currentVehicle.internalVolume} m³
                 </span>
               </div>
               {requiredLicenses.length > 0 && (
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Licenças Requeridas</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
-                    {requiredLicenses.map((lic: string) => (
-                      <Badge key={lic} variant="secondary">{lic}</Badge>
+                    {requiredLicenses.map((lic) => (
+                      <Badge key={lic.id} variant="secondary">{lic.name}</Badge>
                     ))}
                   </div>
                 </div>
@@ -120,7 +164,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
               <CardTitle>Operação e Alocação</CardTitle>
             </div>
             {routeId && (
-              <Button variant="ghost" size="sm" icon={<Map size={14} />} onClick={() => onViewRoute?.(routeId)}>
+              <Button variant="ghost" size="sm" icon={<Map size={16} />} onClick={() => onViewRoute?.(routeId)}>
                 Ver Rota Atual
               </Button>
             )}
@@ -139,7 +183,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                 </div>
                 <div className="detail-item">
                   <span className="detail-label">Status da Frota</span>
-                  <span className="detail-value">{getVehicleStatusBadge(vehicle.status)}</span>
+                  <span className="detail-value">{getVehicleStatusBadge(currentVehicle.transportState)}</span>
                 </div>
                 <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                   <span className="detail-label">Capacidade Ocupada</span>
@@ -190,7 +234,7 @@ export const VehicleDetailPage: React.FC<VehicleDetailPageProps> = ({
                     <TableCell className="detail-value-mono">#{orderId}</TableCell>
                     <TableCell>
                       <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                        {vehicle.status === 'onRoute' ? 'Em Deslocamento' : 'Carregado no Pátio'}
+                        {currentVehicle.transportState === 'ON_ROUTE' ? 'Em Deslocamento' : 'Carregado no Pátio'}
                       </span>
                     </TableCell>
                     <TableCell>Rota Logística Sudeste</TableCell>

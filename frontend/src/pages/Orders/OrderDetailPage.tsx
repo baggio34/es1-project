@@ -1,41 +1,37 @@
 import React, { useState } from 'react'
-import type { Order, OrderStatus } from '../../models/order.ts'
+import { cancellableOrderStatuses, type OrderDetailed, type OrderStatusEnum } from '../../../../sdk/src/models/order.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
-import { ArrowLeft, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map, User } from 'lucide-react'
-import { getOrderStatusBadge, formatReg, formatCurrency } from '../../utils/formatters.tsx'
+import { ArrowLeft, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map as MapIcon, User } from 'lucide-react'
+import { getOrderStatusBadge, formatReg } from '../../utils/formatters.tsx'
+import type { DriverPreview, UserSignature } from '../../../../sdk/src/models/user.ts'
+import type { VehicleDetailed, VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface OrderDetailPageProps {
-  order: Order
-  route?: { id?: string; driverId: string; vehicleId: string }
-  vehicle?: { plate: string; model: string }
-  users?: Record<string, string>
-  drivers?: any[]
-  vehicles?: any[]
+  order: OrderDetailed
+  drivers?: DriverPreview[]
+  vehicles?: (VehiclePreview | VehicleDetailed)[]
   onBack: () => void
   onEdit?: (id: number) => void
   onViewRoute?: (routeId: string) => void
   onAction?: (actionType: string, orderId: number, payload?: any) => void
 }
 
-const statusOrderList: { key: OrderStatus; label: string }[] = [
-  { key: 'pendingApproval', label: 'Aprovação' },
-  { key: 'waitingPayment', label: 'Pagamento' },
-  { key: 'inPreparation', label: 'Preparação' },
-  { key: 'loaded', label: 'Carregado' },
-  { key: 'waitingDispatch', label: 'Despacho' },
-  { key: 'onRoute', label: 'Em Rota' },
-  { key: 'arrived', label: 'Entregue' },
+const statusOrderList: { key: OrderStatusEnum; label: string }[] = [
+  { key: 'WAITING_APPROVAL', label: 'Aprovação' },
+  { key: 'WAITING_PAYMENT', label: 'Pagamento' },
+  { key: 'IN_PREPARATION', label: 'Preparação' },
+  { key: 'LOADED', label: 'Carregado' },
+  { key: 'WAITING_DISPATCH', label: 'Despacho' },
+  { key: 'ON_ROUTE', label: 'Em Rota' },
+  { key: 'ARRIVED', label: 'Entregue' },
 ]
 
 export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   order,
-  route,
-  vehicle,
-  users,
   drivers = [],
   vehicles = [],
   onBack,
@@ -44,9 +40,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   onAction,
 }) => {
   const { user } = useAuth()
-  const userRole = user?.role?.toLowerCase()
-  // Admin, Manager e Operator podem gerenciar ações operacionais de pedidos
-  const canManageStatus = ['admin', 'manager', 'operator'].includes(userRole || '')
+  const canManageStatus = ['ADMIN', 'MANAGER', 'OPERATOR'].includes(user?.role ?? '')
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -54,21 +48,28 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   const [cancelReason, setCancelReason] = useState('')
   const [accidentModalOpen, setAccidentModalOpen] = useState(false)
   const [accidentReason, setAccidentReason] = useState('')
-  
+  const [resolveModalOpen, setResolveModalOpen] = useState(false)
+  const [resolutionText, setResolutionText] = useState('')
+
   const [loadModalOpen, setLoadModalOpen] = useState(false)
   const [loadDriverId, setLoadDriverId] = useState('')
   const [loadVehicleId, setLoadVehicleId] = useState('')
 
   const currentIndex = statusOrderList.findIndex((s) => s.key === order.status)
-  const isRejected = order.status === 'rejected'
-  const isCancelled = order.status === 'cancelled'
-  const isAccident = order.status === 'accident' || order.status === 'resolvedAccident'
+  const isRejected = order.status === 'REJECTED'
+  const isCancelled = order.status === 'CANCELLED'
+  const isAccident = order.status === 'ACCIDENT' || order.status === 'RESOLVED_ACCIDENT'
 
-  const routeId = route?.id || (order as any).routeId
-  const arrivedOn = order.arrivedOn
-  
-  const licenses = order.licenses || (order as any).requiredLicenses || []
-  
+  const route = 'route' in order && order.route ? order.route : undefined
+
+  const routeId = route?.id
+  const arrivedOn = order.status === 'ARRIVED' ? order.arrivedOn : undefined
+  const licenses = order.licenses
+  const closingReason =
+    order.status === 'CANCELLED' ? order.cancellationReason
+    : order.status === 'REJECTED' ? order.rejectionReason
+    : undefined
+
   const formatDate = (date?: string) => {
     if (!date) return ''
     try {
@@ -86,50 +87,42 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
     }
   }
 
-  const getUserDisplayName = (u?: any): string => {
-    if (!u) return ''
-    if (typeof u === 'object') {
-      return u.name || u.username || u.id || ''
-    }
-    return users?.[u] ?? u
-  }
+  const getUserDisplayName = (u?: UserSignature): string => (u ? u.name || u.username : '')
 
-  const userName = getUserDisplayName
-
-  const getStepTrackingInfo = (stepKey: OrderStatus) => {
-    let userRaw: any = undefined
+  const getStepTrackingInfo = (stepKey: OrderStatusEnum) => {
+    let userRaw: UserSignature | undefined = undefined
     let dateRaw: string | undefined = undefined
 
     switch (stepKey) {
-      case 'pendingApproval':
+      case 'WAITING_APPROVAL':
         userRaw = order.createdBy
-        dateRaw = order.createdOn || (order as any).createdAt
+        dateRaw = order.createdAt
         break
-      case 'waitingPayment':
-        userRaw = order.approvedBy
-        dateRaw = order.approvedOn
+      case 'WAITING_PAYMENT':
+        if ('approvedBy' in order) {
+          userRaw = order.approvedBy
+          dateRaw = order.approvedOn
+        }
         break
-      case 'inPreparation':
-        userRaw = order.paymentConfirmedBy
-        dateRaw = order.paymentConfirmedOn
+      case 'IN_PREPARATION':
+        if ('paymentConfirmedBy' in order) {
+          userRaw = order.paymentConfirmedBy
+          dateRaw = order.paymentConfirmedOn
+        }
         break
-      case 'loaded':
-        userRaw = order.loadedBy
-        dateRaw = order.loadedAt || (order as any).loadedOn
+      case 'LOADED':
+      case 'WAITING_DISPATCH':
+        if ('loadedBy' in order) {
+          userRaw = order.loadedBy
+          dateRaw = order.loadedOn
+        }
         break
-      case 'waitingDispatch':
-        userRaw = (order as any).dispatchedBy || (order as any).dispatchApprovedBy || order.loadedBy
-        dateRaw = (order as any).dispatchedOn || (order as any).dispatchApprovedOn || order.loadedAt || (order as any).loadedOn
+      case 'ON_ROUTE':
+        userRaw = route?.driver
         break
-      case 'onRoute':
-        userRaw = (order as any).onRouteBy || (order as any).departedBy || route?.driverId || (order as any).driverName
-        dateRaw = (order as any).onRouteOn || (order as any).departedOn
-        break
-      case 'arrived':
-        userRaw = order.arrivedBy || (order as any).deliveredTo || route?.driverId
-        dateRaw = order.arrivedOn
-        break
-      default:
+      case 'ARRIVED':
+        userRaw = route?.driver
+        if ('arrivedOn' in order) dateRaw = order.arrivedOn
         break
     }
 
@@ -145,11 +138,10 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   }
 
   const renderActions = () => {
-    // Se não tiver permissão para gerir status, não mostra botões
     if (!canManageStatus) return null
 
     switch (order.status) {
-      case 'pendingApproval':
+      case 'WAITING_APPROVAL':
         return (
           <>
             <Button variant="default" icon={<Check size={16} />} onClick={() => onAction?.('approve', order.id)}>
@@ -160,25 +152,25 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
             </Button>
           </>
         )
-      case 'waitingPayment':
+      case 'WAITING_PAYMENT':
         return (
           <Button variant="default" icon={<CreditCard size={16} />} onClick={() => onAction?.('confirm-payment', order.id)}>
             Confirmar Pagamento
           </Button>
         )
-      case 'inPreparation':
+      case 'IN_PREPARATION':
         return (
           <Button variant="default" icon={<Box size={16} />} onClick={() => setLoadModalOpen(true)}>
             Carregar Pedido
           </Button>
         )
-      case 'waitingDispatch':
+      case 'WAITING_DISPATCH':
         return (
           <Button variant="outline" icon={<Box size={16} />} onClick={() => onAction?.('unload', order.id)}>
             Descarregar Pedido
           </Button>
         )
-      case 'onRoute':
+      case 'ON_ROUTE':
         return (
           <>
             <Button variant="default" icon={<CheckCircle size={16} />} onClick={() => onAction?.('confirm-arrival', order.id)}>
@@ -189,9 +181,9 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
             </Button>
           </>
         )
-      case 'accident':
+      case 'ACCIDENT':
         return (
-          <Button variant="default" icon={<Check size={16} />} onClick={() => onAction?.('resolve-accident', order.id)}>
+          <Button variant="default" icon={<Check size={16} />} onClick={() => setResolveModalOpen(true)}>
             Resolver Acidente
           </Button>
         )
@@ -210,13 +202,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           <div>
             <h1 className="page-title">Pedido #{order.id}</h1>
             <p className="page-description">
-              Registrado em {formatDate(order.createdOn)} por {getUserDisplayName(order.createdBy)}
+              Registrado em {formatDate(order.createdAt)} por {getUserDisplayName(order.createdBy)}
             </p>
           </div>
         </div>
         <div className="page-actions">
           {renderActions()}
-          {canManageStatus && order.status !== 'arrived' && order.status !== 'rejected' && !isCancelled && (
+          {canManageStatus && (cancellableOrderStatuses as readonly string[]).includes(order.status) && (
             <Button variant="outline" style={{ color: 'var(--color-danger-button)', borderColor: 'var(--color-danger-button)' }} icon={<X size={16} />} onClick={() => setCancelModalOpen(true)}>
               Cancelar Pedido
             </Button>
@@ -229,8 +221,8 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           <CardContent style={{ padding: '1.25rem 1.5rem' }}>
             <div className="order-timeline">
               {statusOrderList.map((step, idx) => {
-                const isCompleted = order.status === 'arrived' ? true : currentIndex > idx
-                const isCurrent = order.status === 'arrived' ? false : currentIndex === idx
+                const isCompleted = order.status === 'ARRIVED' ? true : currentIndex > idx
+                const isCurrent = order.status === 'ARRIVED' ? false : currentIndex === idx
                 const stepInfo = getStepTrackingInfo(step.key)
                 const isPassed = isCompleted || (isCurrent && stepInfo.hasData)
 
@@ -288,28 +280,32 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           <div>
             <strong style={{ color: 'var(--color-danger-text)' }}>{isCancelled ? 'Pedido Cancelado' : 'Pedido Rejeitado'}</strong>
             <p style={{ color: 'var(--color-danger-text)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Motivo informado: {(isCancelled ? order.cancellationReason : order.reason) || 'Motivo não informado.'}
+              Motivo informado: {closingReason || 'Motivo não informado.'}
             </p>
           </div>
         </div>
       )}
 
-      {isAccident && (
-        <div
-          style={{ padding: '1rem 1.25rem', backgroundColor: order.status === 'resolvedAccident' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)', border: `1px solid ${order.status === 'resolvedAccident' ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`, borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
-        >
-          <AlertTriangle size={20} color={order.status === 'resolvedAccident' ? 'var(--color-success-text)' : 'var(--color-warning-text)'} style={{ marginTop: '0.15rem' }} />
-          <div>
-            <strong style={{ color: order.status === 'resolvedAccident' ? 'var(--color-success-text)' : 'var(--color-warning-text)' }}>
-              {order.status === 'resolvedAccident' ? 'Acidente Resolvido' : 'Ocorrência de Trânsito Reportada'}
-            </strong>
-            <p style={{ color: order.status === 'resolvedAccident' ? 'var(--color-success-text)' : 'var(--color-warning-text)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Relato: {order.accidentDescription || 'Incidente registrado na rota de entrega.'}
-              {order.status === 'resolvedAccident' && order.resolutionDescription && (<> Resolução: {order.resolutionDescription}</>)}
-            </p>
+      {isAccident && (() => {
+        const isResolved = order.status === 'RESOLVED_ACCIDENT'
+        const color = isResolved ? 'var(--color-success-text)' : 'var(--color-warning-text)'
+        return (
+          <div
+            style={{ padding: '1rem 1.25rem', backgroundColor: isResolved ? 'var(--color-success-bg)' : 'var(--color-warning-bg)', border: `1px solid ${isResolved ? 'var(--color-success-border)' : 'var(--color-warning-border)'}`, borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}
+          >
+            <AlertTriangle size={20} color={color} style={{ marginTop: '0.15rem' }} />
+            <div>
+              <strong style={{ color }}>
+                {isResolved ? 'Acidente Resolvido' : 'Ocorrência de Trânsito Reportada'}
+              </strong>
+              <p style={{ color, fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                {order.status === 'ACCIDENT' && <>Relato: {order.accidentDescription}</>}
+                {order.status === 'RESOLVED_ACCIDENT' && <>Resolução: {order.accidentResolutionDescription}</>}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
         <Card>
@@ -334,21 +330,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 <span className="detail-label">Volume Cúbico</span>
                 <span className="detail-value">{order.volume} m³</span>
               </div>
-              <div className="detail-item">
-                <span className="detail-label">Valor dos Itens</span>
-                <span className="detail-value">{formatCurrency(order.value)}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Preço do Frete</span>
-                <span className="detail-value">{formatCurrency(order.shipmentPrice)}</span>
-              </div>
-              
+
               <div className="detail-item">
                 <span className="detail-label">Licenças Requeridas</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.25rem' }}>
                   {licenses.length > 0 ? (
-                    licenses.map((lic: string) => (
-                      <Badge key={lic} variant="secondary">{lic}</Badge>
+                    licenses.map((lic) => (
+                      <Badge key={lic.id} variant="secondary">{lic.name}</Badge>
                     ))
                   ) : (
                     <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
@@ -393,7 +381,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
               <CardTitle>Alocação de Transporte</CardTitle>
             </div>
             {routeId && (
-              <Button variant="ghost" size="sm" icon={<Map size={14} />} onClick={() => onViewRoute?.(routeId)}>
+              <Button variant="ghost" size="sm" icon={<MapIcon size={14} />} onClick={() => onViewRoute?.(routeId)}>
                 Ver Rota
               </Button>
             )}
@@ -404,13 +392,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 <div className="detail-item">
                   <span className="detail-label">Motorista Alocado</span>
                   <span className="detail-value detail-value-mono" style={{ fontSize: '0.8125rem' }}>
-                    {userName(route.driverId)}
+                    {route.driver.name} (@{route.driver.username})
                   </span>
                 </div>
                 <div className="detail-item">
                   <span className="detail-label">Veículo da Frota</span>
                   <span className="detail-value detail-value-mono" style={{ fontSize: '0.8125rem' }}>
-                    {vehicle ? `${vehicle.model} (${vehicle.plate})` : route.vehicleId}
+                    {route.vehicle.plate}
                   </span>
                 </div>
                 {routeId && (
@@ -444,38 +432,41 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
       </div>
 
       {(() => {
-        const activeDrivers = (drivers || []).filter((d: any) => d.condition !== 'deactivated')
-        const activeVehicles = (vehicles || []).filter((v: any) => v.condition !== 'deactivated')
+        const activeDrivers = (drivers || []).filter((d) => d.isActive)
+        const activeVehicles = (vehicles || []).filter((v) => v.isActive)
 
-        const selectedVehicleObj = activeVehicles.find((v: any) => v.plate === loadVehicleId || v.id === loadVehicleId)
-        const selectedDriverObj = activeDrivers.find((d: any) => d.username === loadDriverId || d.id === loadDriverId)
+        const selectedVehicleObj = activeVehicles.find((v) => v.plate === loadVehicleId || v.id === loadVehicleId)
+        const selectedDriverObj = activeDrivers.find((d) => d.username === loadDriverId)
 
-        const requiredLicenses: string[] = order.licenses || (order as any).requiredLicenses || []
+        const requiredLicenses: string[] = order.licenses.map((l) => l.name)
 
-        // Validação de Peso (Carga)
-        const isWeightExceeded = !!selectedVehicleObj && (Number(order.weight) > Number(selectedVehicleObj.maxLoad))
+        const isWeightExceeded = !!selectedVehicleObj && Number(order.weight) > Number(selectedVehicleObj.maxLoad)
+        const isVolumeExceeded = !!selectedVehicleObj && Number(order.volume) > Number(selectedVehicleObj.internalVolume)
 
-        // Validação de Volume
-        const isVolumeExceeded = !!selectedVehicleObj && (Number(order.volume) > Number(selectedVehicleObj.internalVolume))
+        const vehicleLicenses: string[] =
+          selectedVehicleObj && 'licenses' in selectedVehicleObj && Array.isArray(selectedVehicleObj.licenses)
+            ? selectedVehicleObj.licenses.map((lic) => lic.name)
+            : []
+        const hasVehicleLicenseData = !!selectedVehicleObj && 'licenses' in selectedVehicleObj
+        const missingVehicleLicenses = hasVehicleLicenseData
+          ? requiredLicenses.filter((lic) => !vehicleLicenses.includes(lic))
+          : []
+        const isVehicleMissingLicense = missingVehicleLicenses.length > 0
 
-        // Validação de Licenças do Veículo
-        const vehicleLicenses: string[] = selectedVehicleObj?.licenses || []
-        const missingVehicleLicenses = requiredLicenses.filter(lic => !vehicleLicenses.includes(lic))
-        const isVehicleMissingLicense = !!selectedVehicleObj && missingVehicleLicenses.length > 0
-
-        // Validação de Licenças do Condutor
-        const driverLicenses: string[] = selectedDriverObj?.licenses || []
-        const missingDriverLicenses = requiredLicenses.filter(lic => !driverLicenses.includes(lic))
-        const isDriverMissingLicense = !!selectedDriverObj && missingDriverLicenses.length > 0
+        const isStateMismatch =
+          !!selectedVehicleObj &&
+          !!selectedDriverObj &&
+          selectedVehicleObj.transportState !== selectedDriverObj.transportState
 
         const hasCapacityError = isWeightExceeded || isVolumeExceeded
-        const hasLicenseError = isVehicleMissingLicense || isDriverMissingLicense
+        const hasLicenseError = isVehicleMissingLicense
 
         const canConfirmLoad = Boolean(
-          loadDriverId && 
-          loadVehicleId && 
-          !hasCapacityError && 
-          !hasLicenseError
+          loadDriverId &&
+          loadVehicleId &&
+          !hasCapacityError &&
+          !hasLicenseError &&
+          !isStateMismatch
         )
 
         return (
@@ -488,12 +479,11 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
             confirmDisabled={!canConfirmLoad}
             onConfirm={() => {
               if (!canConfirmLoad) return
-              onAction?.('load', order.id, { driverId: loadDriverId, vehicleId: loadVehicleId.toUpperCase() })
+              onAction?.('load', order.id, { driverUsername: loadDriverId, vehiclePlate: loadVehicleId.toUpperCase() })
               setLoadModalOpen(false)
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Resumo de Requisitos da Carga */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
@@ -520,7 +510,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 </div>
               </div>
 
-              {/* 1. Seleção de Veículo de Transporte */}
               <div className="ui-form-group">
                 <label className="ui-label" style={{ fontWeight: 600 }}>1. Veículo de Transporte *</label>
                 <select
@@ -529,28 +518,30 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                   onChange={(e) => {
                     const nextVehicle = e.target.value
                     setLoadVehicleId(nextVehicle)
-                    if (!nextVehicle) {
-                      setLoadDriverId('')
-                    }
+                    setLoadDriverId('')
                   }}
                 >
                   <option value="">Selecione um veículo com capacidade suficiente...</option>
-                  {activeVehicles.map((v: any) => {
-                    const isBusy = v.status === 'onRoute'
+                  {activeVehicles.map((v) => {
+                    const isUnavailable = v.transportState === 'ON_ROUTE' || v.transportState === 'WAITING_DRIVER_DISPATCH'
+                    const isAssembling = v.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
                     const isUnderWeight = Number(order.weight) > Number(v.maxLoad)
                     const isUnderVolume = Number(order.volume) > Number(v.internalVolume)
                     const capacityWarning = (isUnderWeight || isUnderVolume) ? ' ⚠️ [Capacidade Insuficiente]' : ''
-                    const statusLabel = isBusy ? ' (Em Rota - Indisponível)' : capacityWarning
+                    const stateLabel = isUnavailable
+                      ? ' (Indisponível)'
+                      : isAssembling
+                        ? ' (Em Montagem de Rota)'
+                        : ' (Disponível)'
                     return (
-                      <option key={v.plate} value={v.plate} disabled={isBusy}>
-                        {v.plate} - {v.model} (Carga: {v.maxLoad}kg | Vol: {v.internalVolume}m³){statusLabel}
+                      <option key={v.plate} value={v.plate} disabled={isUnavailable}>
+                        {v.plate} - {v.model} (Carga: {v.maxLoad}kg | Vol: {v.internalVolume}m³){stateLabel}{capacityWarning}
                       </option>
                     )
                   })}
                 </select>
               </div>
 
-              {/* Feedback de Validação do Veículo Selecionado */}
               {selectedVehicleObj && (
                 <div style={{
                   display: 'flex',
@@ -596,7 +587,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 </div>
               )}
 
-              {/* 2. Seleção de Motorista (Bloqueado e apagadinho enquanto não houver veículo) */}
               <div
                 className="ui-form-group"
                 style={{
@@ -624,11 +614,24 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                   <option value="">
                     {loadVehicleId ? 'Selecione um motorista...' : 'Bloqueado: selecione primeiro um veículo acima...'}
                   </option>
-                  {activeDrivers.map((d: any) => {
-                    const isBusy = d.status === 'onRoute'
-                    const statusLabel = isBusy ? ' (Em Rota - Indisponível)' : d.status === 'waitingOperatorOrder' ? ' (Em Montagem de Rota)' : ' (Disponível)'
+                  {activeDrivers.map((d) => {
+                    const isBusy = d.transportState === 'ON_ROUTE' || d.transportState === 'WAITING_DRIVER_DISPATCH'
+                    const isDifferentState = !!selectedVehicleObj && d.transportState !== selectedVehicleObj.transportState
+                    const isDifferentRoute =
+                      !!selectedVehicleObj &&
+                      d.transportState === 'WAITING_OPERATOR_AUTHORIZATION' &&
+                      d.route.vehicle.plate !== selectedVehicleObj.plate
+                    const isDisabled = isBusy || isDifferentState || isDifferentRoute
+
+                    const statusLabel =
+                      d.transportState === 'FREE'
+                        ? ' (Disponível)'
+                        : d.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
+                          ? ` (Em Montagem de Rota - ${d.route.vehicle.plate})`
+                          : ' (Indisponível)'
+
                     return (
-                      <option key={d.username} value={d.username} disabled={isBusy}>
+                      <option key={d.username} value={d.username} disabled={isDisabled}>
                         {d.name} (@{d.username}){statusLabel}
                       </option>
                     )
@@ -638,11 +641,6 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                   <p style={{ marginTop: '0.35rem', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
                     Escolha um veículo acima para liberar a seleção do motorista.
                   </p>
-                ) : isDriverMissingLicense ? (
-                  <div style={{ marginTop: '0.35rem', color: 'var(--color-danger-text)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <AlertTriangle size={14} />
-                    <span>Motorista selecionado não possui as licenças: {missingDriverLicenses.join(', ')}</span>
-                  </div>
                 ) : null}
               </div>
             </div>
@@ -694,13 +692,30 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         confirmText="Reportar Acidente"
         confirmVariant="destructive"
         onConfirm={() => {
-          onAction?.('report-accident', order.id, { accidentMessage: accidentReason })
+          onAction?.('report-accident', order.id, { accident: accidentReason })
           setAccidentModalOpen(false)
         }}
       >
         <div className="ui-form-group">
           <label className="ui-label">Detalhes da Ocorrência</label>
           <textarea className="ui-textarea" rows={3} placeholder="Ex: Acidente na rodovia..." value={accidentReason} onChange={(e) => setAccidentReason(e.target.value)} />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={resolveModalOpen}
+        onClose={() => setResolveModalOpen(false)}
+        title="Resolver Acidente"
+        description="Descreva como a ocorrência foi resolvida."
+        confirmText="Confirmar Resolução"
+        onConfirm={() => {
+          onAction?.('resolve-accident', order.id, { description: resolutionText })
+          setResolveModalOpen(false)
+        }}
+      >
+        <div className="ui-form-group">
+          <label className="ui-label">Descrição da Resolução</label>
+          <textarea className="ui-textarea" rows={3} value={resolutionText} onChange={(e) => setResolutionText(e.target.value)} />
         </div>
       </Modal>
     </div>

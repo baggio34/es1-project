@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react'
 import { orderApi } from '../api/orderApi'
-import type { OrdersGetAllReply } from '../models/order'
+import type { GetOrdersReply } from '../../../sdk/src/dtos/order.dto.ts'
 
 export function useOrder() {
-  const [orders, setOrders] = useState<OrdersGetAllReply>([])
+  const [orders, setOrders] = useState<GetOrdersReply>([])
   const [loading, setLoading] = useState(false)
 
   const loadOrders = useCallback(async () => {
