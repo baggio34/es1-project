@@ -2,9 +2,8 @@ import { apiFetch } from './client'
 import type {
   CreateOrderRequest, UpdateOrderRequest, GetOrdersReply, GetOrderReply,
   RejectOrderRequest, CancelOrderRequest, LoadOrderRequest,
-  ReportOrderAccidentRequest, ResolveOrderAccidentRequest,
+  ReportOrderAccidentRequest, ResolveOrderAccidentRequest, SwapOrderIndex,
 } from '../../../sdk/src/dtos/order.dto.ts'
-import type { GetRouteSuggestionsReply } from '../../../sdk/src/dtos/route.dto.ts'
 
 export const orderApi = {
   create: (data: CreateOrderRequest) =>
@@ -34,9 +33,6 @@ export const orderApi = {
   load: (id: number | string, data: LoadOrderRequest) =>
     apiFetch<string>(`/orders/${id}/load`, { method: 'POST', body: JSON.stringify(data) }),
 
-  getSuggestions: (id: number | string) =>
-    apiFetch<GetRouteSuggestionsReply>(`/orders/${id}/suggestions`),
-
   unload: (id: number | string) =>
     apiFetch<string>(`/orders/${id}/unload`, { method: 'POST' }),
 
@@ -48,4 +44,7 @@ export const orderApi = {
 
   confirmArrival: (id: number | string) =>
     apiFetch<string>(`/orders/${id}/confirm-arrival`, { method: 'POST' }),
+
+  swapIndex: (id: number | string, data: SwapOrderIndex) =>
+    apiFetch<string>(`/orders/${id}/swap-index`, { method: 'POST', body: JSON.stringify(data) }),
 }

@@ -3,8 +3,7 @@ import { OrderManager } from '@/domain/order.manager.ts'
 import { RouteManager } from '@/domain/route.manager.ts'
 import { UserManager } from '@/domain/user.manager.ts'
 import { VehicleManager } from '@/domain/vehicle.manager.ts'
-import type { CancelOrderRequest, CreateOrderRequest, GetOrderReply, GetOrdersReply, LoadOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest, UpdateOrderRequest } from '@/dtos/order.dto.ts'
-import type { GetRouteSuggestionsReply } from '@/dtos/route.dto.ts'
+import type { CancelOrderRequest, CreateOrderRequest, GetOrderReply, GetOrdersReply, LoadOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest, SwapOrderIndex, UpdateOrderRequest } from '@/dtos/order.dto.ts'
 import { requireClerk, requireDriver, requireManager, requireOperator, requireOperatorOrClerk } from '@/services/auth/authorization.ts'
 import express, { type NextFunction, type Request, type Response } from 'express'
 
@@ -17,12 +16,12 @@ export const orderRouter = express.Router()
   .post("/:id/reject", requireOrder, requireOperator, handleRejectOrder)
   .post("/:id/approve", requireOrder, requireOperator, handleApproveOrder)
   .post("/:id/confirm-payment", requireOrder, requireClerk, handleConfirmOrderPayment)
-  .get("/:id/suggestions", requireOrder, requireOperator, handleGetOrderSuggestions)
   .post("/:id/load", requireOrder, requireOperator, handleLoadOrder)
   .post("/:id/unload", requireOrder, requireOperator, handleUnloadOrder)
   .post("/:id/confirm-arrival", requireOrder, requireDriver, handleConfirmOrderArrival)
   .post("/:id/report-accident", requireOrder, requireDriver, handleReportOrderAccident)
   .post("/:id/resolve-accident", requireOrder, requireManager, handleResolveOrderAccident)
+  .post("/:id/swap-index", requireOrder, requireOperator, handleSwapOrderIndex)
 
 async function requireOrder(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   const id = Number(req.params.id)
@@ -87,12 +86,6 @@ async function handleConfirmOrderPayment(req: Request<{}, ApiResult<string>>, re
   res.status(result.isErr ? 400 : 200).send(result.map(() => "confirmed").toApiResult())
 }
 
-async function handleGetOrderSuggestions(req: Request<{}, ApiResult<GetRouteSuggestionsReply>>, res: Response) {
-  const result = await RouteManager.getInstance().routeSuggestions(req.order!)
-
-  res.status(result.isErr ? 400 : 200).send(result.toApiResult())
-}
-
 async function handleLoadOrder(req: Request<{}, ApiResult<string>, LoadOrderRequest>, res: Response) {
   const { driverUsername, vehiclePlate } = req.body
   const driver = await UserManager.getInstance().getActiveDriver(driverUsername)
@@ -135,4 +128,10 @@ async function handleResolveOrderAccident(req: Request<{}, ApiResult<string>, Re
   const result = await OrderManager.getInstance().resolveAccident(req.user!, req.order!, req.body)
 
   res.status(result.isErr ? 400 : 200).send(result.map(() => "resolved accident").toApiResult())
+}
+
+async function handleSwapOrderIndex(req: Request<{}, ApiResult<string>, SwapOrderIndex>, res: Response) {
+  const result = await OrderManager.getInstance().swapIndexes(req.order!, req.body)
+
+  res.status(result.isErr ? 400 : 200).send(result.map(() => "swapped").toApiResult())
 }

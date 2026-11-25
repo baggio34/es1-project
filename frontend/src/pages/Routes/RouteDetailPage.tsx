@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react'
 import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
 import type { OrderSignature, OrderStatusEnum } from '../../../../sdk/src/models/order.ts'
 import { routeApi } from '../../api/routeApi.ts'
+import { orderApi } from '../../api/orderApi.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
-import { ArrowLeft, Truck, Package, CheckCircle, XCircle, User, GripVertical, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Truck, Package, CheckCircle, XCircle, User, ChevronUp, ChevronDown } from 'lucide-react'
 import { getRouteStatusBadge, getOrderStatusBadge, formatReg } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
@@ -100,7 +101,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
 
   const canReorder =
     ['ADMIN', 'MANAGER', 'OPERATOR'].includes(user?.role ?? '') &&
-    activeRoute.status !== 'COMPLETED'
+    activeRoute.status === 'WAITING_OPERATOR_AUTHORIZATION'
 
   const routeOrders: RouteOrderItem[] = fullRoute?.orders ?? EMPTY_ORDERS
   const sourceOrders: RouteOrderItem[] = orders && orders.length > 0 ? orders : routeOrders
@@ -110,48 +111,30 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
   const [orderedOrders, setOrderedOrders] = useState<RouteOrderItem[]>(() =>
     sortOrdersByRouteIndex(sourceOrders)
   )
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
 
   if (ordersKey !== prevOrdersKey) {
     setPrevOrdersKey(ordersKey)
     setOrderedOrders(sortOrdersByRouteIndex(sourceOrders))
   }
 
-  const moveOrder = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= orderedOrders.length || fromIndex === toIndex) return
+  const moveOrder = async (fromIndex: number, toIndex: number) => {
+    if (saving || toIndex < 0 || toIndex >= orderedOrders.length) return
+
+    const previous = orderedOrders
     const updated = [...orderedOrders]
-    const [movedItem] = updated.splice(fromIndex, 1)
-    updated.splice(toIndex, 0, movedItem)
+    ;[updated[fromIndex], updated[toIndex]] = [updated[toIndex], updated[fromIndex]]
     setOrderedOrders(updated)
-  }
+    setSaving(true)
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', String(index))
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index)
+    try {
+      await orderApi.swapIndex(previous[fromIndex].id, { swappedId: previous[toIndex].id })
+    } catch (err: any) {
+      setOrderedOrders(previous)
+      alert(`Erro ao reordenar: ${err.message}`)
+    } finally {
+      setSaving(false)
     }
-  }
-
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault()
-    if (draggedIndex !== null && draggedIndex !== targetIndex) {
-      moveOrder(draggedIndex, targetIndex)
-    }
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
   }
 
   const orderCount = orderedOrders.length
@@ -277,7 +260,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
             </div>
             {canReorder && orderedOrders.length > 1 && (
               <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', fontWeight: 'normal' }}>
-                Arraste o ícone ⠿ ou use as setas para reordenar a sequência de entrega
+                Use as setas para reordenar a sequência de entrega
               </span>
             )}
           </div>
@@ -313,40 +296,10 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                     statusTime = formatDateTime(order.accidentOn)
                   }
 
-                  const isDragging = draggedIndex === idx
-                  const isDragTarget = dragOverIndex === idx && draggedIndex !== idx
-
                   return (
-                    <TableRow
-                      key={order.id}
-                      draggable={canReorder}
-                      onDragStart={canReorder ? (e) => handleDragStart(e, idx) : undefined}
-                      onDragOver={canReorder ? (e) => handleDragOver(e, idx) : undefined}
-                      onDrop={canReorder ? (e) => handleDrop(e, idx) : undefined}
-                      onDragEnd={canReorder ? handleDragEnd : undefined}
-                      style={{
-                        opacity: isDragging ? 0.4 : 1,
-                        backgroundColor: isDragTarget ? 'rgba(30, 64, 175, 0.08)' : undefined,
-                        borderTop: isDragTarget ? '2px solid var(--color-primary)' : undefined,
-                        transition: 'background-color 0.15s ease',
-                      }}
-                    >
+                    <TableRow key={order.id}>
                       <TableCell>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {canReorder && (
-                            <span
-                              title="Arrastar para reordenar"
-                              style={{
-                                cursor: 'grab',
-                                color: 'var(--color-text-muted)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '2px',
-                              }}
-                            >
-                              <GripVertical size={16} />
-                            </span>
-                          )}
                           <span
                             style={{
                               display: 'inline-flex',
@@ -368,7 +321,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                               <button
                                 type="button"
-                                disabled={idx === 0}
+                                disabled={idx === 0 || saving}
                                 onClick={(e) => { e.stopPropagation(); moveOrder(idx, idx - 1) }}
                                 title="Mover para cima"
                                 style={{
@@ -385,7 +338,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                               </button>
                               <button
                                 type="button"
-                                disabled={idx === orderedOrders.length - 1}
+                                disabled={idx === orderedOrders.length - 1 || saving}
                                 onClick={(e) => { e.stopPropagation(); moveOrder(idx, idx + 1) }}
                                 title="Mover para baixo"
                                 style={{
