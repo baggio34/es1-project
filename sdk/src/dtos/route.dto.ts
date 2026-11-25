@@ -4,7 +4,7 @@ import type { VehicleSignature } from "@/models/vehicle.ts"
 
 export type GetRoutesReply = RoutePreview[]
 
-export type GetRouteReply = RouteWithOrders[]
+export type GetRouteReply = RouteWithOrders
 
 export type GetDriverRoutesReply = RoutePreview[]
 

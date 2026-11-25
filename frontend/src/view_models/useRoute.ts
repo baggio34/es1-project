@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react'
-import { routeApi } from '../api/routeApi'
-import type { RoutesGetAllReply } from '../models/route'
+import { routeApi } from '../api/routeApi.ts'
+import type { GetRoutesReply } from '../../../sdk/src/dtos/route.dto.ts'
 
 export function useRoute() {
-  const [routes, setRoutes] = useState<RoutesGetAllReply>([])
+  const [routes, setRoutes] = useState<GetRoutesReply>([])
   const [loading, setLoading] = useState(false)
 
   const loadRoutes = useCallback(async () => {

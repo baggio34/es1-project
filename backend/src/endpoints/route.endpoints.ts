@@ -1,12 +1,13 @@
 import type { ApiResult } from '@/api_result.ts'
 import { RouteManager } from '@/domain/route.manager.ts'
 import type { GetRouteReply, GetRoutesReply } from '@/dtos/route.dto.ts'
-import { requireDriver, requireOperator } from '@/services/auth/authorization.ts'
+import { isOperator } from '@/lib/user.utils.ts'
+import { requireDriver, requireOperator, requireOperatorOrDriver } from '@/services/auth/authorization.ts'
 import express, { type NextFunction, type Request, type Response } from 'express'
 
 export const routeRouter = express.Router()
-  .get("/", requireOperator, handleGetRoutes)
-  .get("/:id", requireRoute, handleGetRoute)
+  .get("/", requireOperatorOrDriver, handleGetRoutes)
+  .get("/:id", requireRoute, requireOperatorOrDriver, handleGetRoute)
   .post("/:id/authorize-dispatch", requireRoute, requireOperator, handleAuthorizeRouteDispatch)
   .post("/:id/unauthorize-dispatch", requireRoute, requireOperator, handleUnauthorizeRouteDispatch)
   .post("/:id/confirm-dispatch", requireRoute, requireDriver, handleConfirmRouteDispatch)
@@ -24,13 +25,19 @@ async function requireRoute(req: Request<{ id: string }>, res: Response, next: N
 }
 
 async function handleGetRoute(req: Request<{}, ApiResult<GetRouteReply>>, res: Response) {
+  if (!isOperator(req.user) && req.route!.driverId !== req.user!.id) {
+    res.status(403).send({ error: "This route does not belong to you." })
+    return
+  }
+
   const route = await RouteManager.getInstance().get(req.route!.id)
   
   res.status(!route ? 404 : 200).send(route)
 }
 
-async function handleGetRoutes(_req: Request<{}, ApiResult<GetRoutesReply>>, res: Response) {
-  res.status(200).send(await RouteManager.getInstance().getAll())
+async function handleGetRoutes(req: Request<{}, ApiResult<GetRoutesReply>>, res: Response) {
+  const driverUsername = isOperator(req.user) ? undefined : req.user!.username
+  res.status(200).send(await RouteManager.getInstance().getAll(driverUsername))
 }
 
 async function handleAuthorizeRouteDispatch(req: Request<{}, ApiResult<string>>, res: Response) {

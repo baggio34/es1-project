@@ -1,19 +1,20 @@
 import { apiFetch } from './client'
-import type { LoginPayload, LoginReply, UserRegistrationPayload, UserPatchPayload, UserGetReply, User } from '../models/user'
+import type { LoginRequest, LoginReply } from '../../../sdk/src/dtos/auth.dto.ts'
+import type { CreateUserRequest, UpdateUserRequest, GetUserReply, GetUsersReply } from '../../../sdk/src/dtos/user.dto.ts'
 
 export const userApi = {
-  login: (data: LoginPayload) => 
-    apiFetch<LoginReply>('/users/login', { method: 'POST', body: JSON.stringify(data) }),
-    
-  register: (data: UserRegistrationPayload) => 
-    apiFetch<string>('/users/register', { method: 'POST', body: JSON.stringify(data) }),
-    
-  patch: (username: string, data: UserPatchPayload) => 
+  login: (data: LoginRequest) =>
+    apiFetch<LoginReply>('/login', { method: 'POST', body: JSON.stringify(data) }),
+
+  register: (data: CreateUserRequest) =>
+    apiFetch<string>('/users', { method: 'POST', body: JSON.stringify(data) }),
+
+  patch: (username: string, data: Partial<UpdateUserRequest>) =>
     apiFetch<string>(`/users/${username}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    
-  getByUsername: (username: string) => 
-    apiFetch<UserGetReply>(`/users/${username}`),
-    
-  getAll: () => 
-    apiFetch<User[]>('/users'),
+
+  getByUsername: (username: string) =>
+    apiFetch<GetUserReply>(`/users/${username}`),
+
+  getAll: () =>
+    apiFetch<GetUsersReply>('/users'),
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import type { User } from '../../models/user.ts'
+import type { UserPreview } from '../../../../sdk/src/models/user.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { Input } from '../../components/ui/input.tsx'
@@ -8,7 +8,7 @@ import { Plus, Search, Pencil, RefreshCw, Eye } from 'lucide-react'
 import { getUserRoleBadge } from '../../utils/formatters.tsx'
 
 export interface UserListPageProps {
-  users: User[]
+  users: UserPreview[]
   onReload: () => void
   onCreate: () => void
   onEdit: (username: string) => void
@@ -75,11 +75,11 @@ export const UserListPage: React.FC<UserListPageProps> = ({
             onChange={(e) => setRoleFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos os Cargos' },
-              { value: 'admin', label: 'Administrador' },
-              { value: 'manager', label: 'Gerente' },
-              { value: 'clerk', label: 'Atendente' },
-              { value: 'operator', label: 'Operador' },
-              { value: 'driver', label: 'Motorista' },
+              { value: 'ADMIN', label: 'Administrador' },
+              { value: 'MANAGER', label: 'Gerente' },
+              { value: 'CLERK', label: 'Atendente' },
+              { value: 'OPERATOR', label: 'Operador' },
+              { value: 'DRIVER', label: 'Motorista' },
             ]}
           />
         </div>
@@ -106,7 +106,6 @@ export const UserListPage: React.FC<UserListPageProps> = ({
             </TableRow>
           ) : (
             filteredUsers.map((user) => (
-              /* A key agora é o username, pois a API não fornece id */
               <TableRow key={user.username}>
                 <TableCell>
                   <span
@@ -128,15 +127,15 @@ export const UserListPage: React.FC<UserListPageProps> = ({
                     alignItems: 'center',
                     gap: '0.375rem',
                     fontSize: '0.8125rem',
-                    color: user.condition === 'active' ? 'var(--color-success-text)' : 'var(--color-danger-text)'
+                    color: user.isActive ? 'var(--color-success-text)' : 'var(--color-danger-text)'
                   }}>
                     <span style={{
                       width: '6px',
                       height: '6px',
                       borderRadius: '50%',
-                      backgroundColor: user.condition === 'active' ? 'var(--color-success-button)' : 'var(--color-danger-button)'
+                      backgroundColor: user.isActive ? 'var(--color-success-button)' : 'var(--color-danger-button)'
                     }} />
-                    {user.condition === 'active' ? 'Ativo' : 'Desativado'}
+                    {user.isActive ? 'Ativo' : 'Desativado'}
                   </span>
                 </TableCell>
                 <TableCell style={{ textAlign: 'right' }}>
@@ -153,7 +152,6 @@ export const UserListPage: React.FC<UserListPageProps> = ({
                       size="sm"
                       icon={<Pencil size={15} />}
                       title="Editar Usuário"
-                      /* Passando o username explicitamente */
                       onClick={() => onEdit(user.username)}
                     />
                   </div>

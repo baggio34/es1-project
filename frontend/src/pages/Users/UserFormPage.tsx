@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import type { User, UserRole, UserRegistrationPayload } from '../../models/user.ts'
+import type { UserDetailed, UserPreview, RoleEnum } from '../../../../sdk/src/models/user.ts'
+import type { CreateUserRequest, UpdateUserRequest } from '../../../../sdk/src/dtos/user.dto.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { NativeSelect as Select } from '../../components/ui/select.tsx'
@@ -7,10 +8,11 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../comp
 import { ArrowLeft, Save, User as UserIcon, AlertCircle, Plus, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge.tsx'
 import { useLicense } from '../../view_models/useLicense.ts'
+import { userApi } from '../../api/userApi.ts'
 
 export interface UserFormPageProps {
-  initialUser?: User | null
-  onSave: (data: UserRegistrationPayload) => Promise<void>
+  initialUser?: UserDetailed | UserPreview | null
+  onSave: (data: CreateUserRequest | Partial<UpdateUserRequest>) => Promise<void>
   onCancel: () => void
 }
 
@@ -21,14 +23,20 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
 }) => {
   const isEditing = !!initialUser
 
+  const [detailedUser, setDetailedUser] = useState<UserDetailed | null>(
+    initialUser && 'licenses' in initialUser ? initialUser : null
+  )
+
   const [name, setName] = useState(initialUser?.name || '')
   const [username, setUsername] = useState(initialUser?.username || '')
   const [cpf, setCpf] = useState(initialUser?.cpf || '')
-  const [password, setPassword] = useState('') 
-  const [role, setRole] = useState<UserRole>(initialUser?.role || 'driver')
-  const [condition, setCondition] = useState<'active' | 'deactivated'>(initialUser?.condition || 'active')
-  const [licenses, setLicenses] = useState<string[]>(
-    initialUser && initialUser.role === 'driver' && 'licenses' in initialUser ? initialUser.licenses || [] : []
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<RoleEnum>(initialUser?.role || 'DRIVER')
+  const [isActive, setIsActive] = useState<boolean>(initialUser?.isActive ?? true)
+  const [licenseIds, setLicenseIds] = useState<string[]>(
+    initialUser && initialUser.role === 'DRIVER' && 'licenses' in initialUser
+      ? (initialUser.licenses ?? []).map((l) => l.id)
+      : []
   )
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -41,14 +49,52 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
     loadLicenses().catch(console.error)
   }, [loadLicenses])
 
-  const handleAddLicense = (license: string) => {
-    if (!licenses.includes(license)) {
-      setLicenses((prev) => [...prev, license])
+  // Se initialUser veio da listagem (UserPreview, sem licenses), busca o UserDetailed completo
+  useEffect(() => {
+    if (!initialUser) return
+
+    setName(initialUser.name)
+    setUsername(initialUser.username)
+    setCpf(initialUser.cpf)
+    setRole(initialUser.role)
+    setIsActive(initialUser.isActive)
+
+    if (initialUser.role === 'DRIVER') {
+      if ('licenses' in initialUser && Array.isArray(initialUser.licenses)) {
+        setDetailedUser(initialUser)
+        setLicenseIds(initialUser.licenses.map((l) => l.id))
+      } else {
+        userApi
+          .getByUsername(initialUser.username)
+          .then((fullUser) => {
+            setDetailedUser(fullUser)
+            if (fullUser.role === 'DRIVER') {
+              setLicenseIds((fullUser.licenses ?? []).map((l) => l.id))
+            }
+          })
+          .catch(console.error)
+      }
+    }
+  }, [initialUser])
+
+  const handleAddLicense = (licenseId: string) => {
+    if (!licenseIds.includes(licenseId)) {
+      setLicenseIds((prev) => [...prev, licenseId])
     }
   }
 
-  const handleRemoveLicense = (license: string) => {
-    setLicenses((prev) => prev.filter((l) => l !== license))
+  const handleRemoveLicense = (licenseId: string) => {
+    setLicenseIds((prev) => prev.filter((id) => id !== licenseId))
+  }
+
+  const getLicenseName = (id: string) => {
+    const fromDb = dbLicenses.find((l) => l.id === id)
+    if (fromDb) return fromDb.name
+    if (detailedUser?.role === 'DRIVER') {
+      const fromUser = (detailedUser.licenses ?? []).find((l) => l.id === id)
+      if (fromUser) return fromUser.name
+    }
+    return id
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,25 +115,29 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
     setIsSubmitting(true)
 
     try {
-      const payload: any = {
-        name: name.trim(),
-        username: username.trim().toLowerCase(),
-        role,
-      }
-
       if (isEditing) {
-        payload.condition = condition
-        if (password) payload.password = password
-        if (role === 'driver') payload.licenses = licenses
-      } else {
-        payload.cpf = cleanCpf
-        payload.password = password
-        if (role === 'driver') {
-          payload.licenses = licenses 
+        const updatePayload: Partial<UpdateUserRequest> = {
+          name: name.trim(),
+          isActive,
+          ...(password ? { password } : {}),
+          ...(role === 'DRIVER' ? { licenseIds } : {}),
         }
-      }
+        await onSave(updatePayload)
+      } else {
+        const basePayload = {
+          name: name.trim(),
+          username: username.trim().toLowerCase(),
+          cpf: cleanCpf,
+          password,
+        }
 
-      await onSave(payload)
+        const createPayload: CreateUserRequest =
+          role === 'DRIVER'
+            ? { ...basePayload, role: 'DRIVER', licenseIds }
+            : { ...basePayload, role }
+
+        await onSave(createPayload)
+      }
     } catch (err: any) {
       setApiError(err.message || 'Erro ao processar utilizador. Verifique as permissões de gestor.')
     } finally {
@@ -141,15 +191,23 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                     disabled={isSubmitting}
                   />
                 </div>
-                
+
                 <div>
                   <label className="detail-label" style={{ display: 'block', marginBottom: '0.5rem' }}>
                     CPF do Colaborador
                   </label>
                   <Input
                     value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
-                    placeholder="Somente números (11 dígitos)"
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '').slice(0, 11)
+                      const masked = raw
+                        .replace(/^(\d{3})(\d)/, '$1.$2')
+                        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+                        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4')
+                      setCpf(masked)
+                    }}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
                     required
                     disabled={isSubmitting || isEditing}
                   />
@@ -189,14 +247,14 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                   </label>
                   <Select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    onChange={(e) => setRole(e.target.value as RoleEnum)}
                     disabled={isSubmitting || isEditing}
                     options={[
-                      { value: 'admin', label: 'Administrador (T.I)' },
-                      { value: 'manager', label: 'Gerente Logístico' },
-                      { value: 'operator', label: 'Operador de Pátio' },
-                      { value: 'clerk', label: 'Atendente Comercial' },
-                      { value: 'driver', label: 'Motorista' },
+                      { value: 'ADMIN', label: 'Administrador (T.I)' },
+                      { value: 'MANAGER', label: 'Gerente Logístico' },
+                      { value: 'OPERATOR', label: 'Operador de Pátio' },
+                      { value: 'CLERK', label: 'Atendente Comercial' },
+                      { value: 'DRIVER', label: 'Motorista' },
                     ]}
                   />
                 </div>
@@ -207,35 +265,35 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                       Status da Conta
                     </label>
                     <Select
-                      value={condition}
-                      onChange={(e) => setCondition(e.target.value as 'active' | 'deactivated')}
+                      value={isActive ? 'true' : 'false'}
+                      onChange={(e) => setIsActive(e.target.value === 'true')}
                       disabled={isSubmitting}
                       options={[
-                        { value: 'active', label: 'Ativo' },
-                        { value: 'deactivated', label: 'Desativado' },
+                        { value: 'true', label: 'Ativo' },
+                        { value: 'false', label: 'Desativado' },
                       ]}
                     />
                   </div>
                 )}
               </div>
 
-              {role === 'driver' && (
+              {role === 'DRIVER' && (
                 <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
                   <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Gerenciamento de Licenças Especiais (Opcional)</h4>
                   <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
                     Adicione ou remova as licenças válidas na CNH do motorista caso ele opere cargas especiais.
                   </p>
-                  
+
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-                    {licenses.map((license) => (
-                      <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        {license}
+                    {licenseIds.map((licId) => (
+                      <Badge key={licId} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        {getLicenseName(licId)}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            handleRemoveLicense(license)
+                            handleRemoveLicense(licId)
                           }}
                           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', color: 'inherit' }}
                         >
@@ -243,10 +301,10 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                         </button>
                       </Badge>
                     ))}
-                    {licenses.length === 0 && <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nenhuma licença especial vinculada. O motorista operará apenas cargas padrão.</span>}
+                    {licenseIds.length === 0 && <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nenhuma licença especial vinculada. O motorista operará apenas cargas padrão.</span>}
                   </div>
 
-                  {/* Controles de vinculação visíveis em qualquer momento para o motorista */}
+                  {/* Controles de vinculação */}
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <select
                       id="user-license-select"
@@ -264,8 +322,8 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                       disabled={isSubmitting || loadingLicenses}
                     >
                       <option value="" disabled>Selecione uma licença...</option>
-                      {dbLicenses.filter((l) => !licenses.includes(l.name)).map((l) => (
-                        <option key={l.slug} value={l.name}>{l.name}</option>
+                      {dbLicenses.filter((l) => !licenseIds.includes(l.id)).map((l) => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
                       ))}
                     </select>
                     <Button

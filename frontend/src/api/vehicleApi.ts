@@ -1,16 +1,21 @@
 import { apiFetch } from './client'
-import type { VehicleRegistrationPayload, VehiclePatchPayload, VehicleGetReply, Vehicle } from '../models/vehicle'
+import type {
+  CreateVehicleRequest,
+  UpdateVehicleRequest,
+  GetVehicleReply,
+  GetVehiclesReply,
+} from '../../../sdk/src/dtos/vehicle.dto.ts'
 
 export const vehicleApi = {
-  register: (data: VehicleRegistrationPayload) => 
+  register: (data: CreateVehicleRequest) =>
     apiFetch<string>('/vehicles', { method: 'POST', body: JSON.stringify(data) }),
-    
-  patch: (plate: string, data: VehiclePatchPayload) => 
+
+  patch: (plate: string, data: Partial<UpdateVehicleRequest>) =>
     apiFetch<string>(`/vehicles/${plate}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    
-  getByPlate: (plate: string) => 
-    apiFetch<VehicleGetReply>(`/vehicles/${plate}`),
-    
-  getAll: () => 
-    apiFetch<Vehicle[]>('/vehicles'),
+
+  getByPlate: (plate: string) =>
+    apiFetch<GetVehicleReply>(`/vehicles/${plate}`),
+
+  getAll: () =>
+    apiFetch<GetVehiclesReply>('/vehicles'),
 }

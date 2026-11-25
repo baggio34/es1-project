@@ -1,25 +1,22 @@
-import React, { useState } from 'react'
-import type { Driver, DriverFormData, DriverStatus } from '../../models/driver.ts'
+import React, { useState, useEffect } from 'react'
+import type { DriverPreview, UserDetailed } from '../../../../sdk/src/models/user.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Input } from '../../components/ui/input.tsx'
 import { Label } from '../../components/ui/label.tsx'
-import { NativeSelect as Select } from '../../components/ui/select.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Check, AlertCircle, Plus, X } from 'lucide-react'
+import { useLicense } from '../../view_models/useLicense.ts'
 
-const AVAILABLE_LICENSES = [
-  'Carga Perigosa',
-  'Carga Refrigerada',
-  'Carga Viva',
-  'Carga Indivisível',
-  'Produtos Químicos',
-  'Inflamáveis',
-  'Medicamentos',
-  'Alimentos Perecíveis',
-]
+export type DriverFormData = {
+  name: string
+  cpf: string
+  username: string
+  password: string | undefined
+  licenseIds: string[]
+}
 
 export interface DriverFormPageProps {
-  initialDriver?: Driver | null
+  initialDriver?: Extract<UserDetailed, { role: 'DRIVER' }> | DriverPreview | null
   onSave: (data: DriverFormData) => Promise<void>
   onCancel: () => void
 }
@@ -35,38 +32,41 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
   const [cpf, setCpf] = useState(initialDriver ? initialDriver.cpf : '')
   const [username, setUsername] = useState(initialDriver ? initialDriver.username : '')
   const [password, setPassword] = useState('')
-  const [licenses, setLicenses] = useState<string[]>(
-    initialDriver && initialDriver.licenses ? initialDriver.licenses : []
+  const [licenseIds, setLicenseIds] = useState<string[]>(
+    initialDriver && 'licenses' in initialDriver ? initialDriver.licenses.map((l) => l.id) : []
   )
-  const [status, setStatus] = useState<DriverStatus>(initialDriver ? initialDriver.status : 'free')
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
-  
-  // Novos estados para controlar o envio e erros da API
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const handleAddLicense = (license: string) => {
-    if (!licenses.includes(license)) {
-      setLicenses((prev) => [...prev, license])
+  const { licenses: dbLicenses, loading: loadingLicenses, loadLicenses } = useLicense()
+
+  useEffect(() => {
+    loadLicenses().catch(console.error)
+  }, [loadLicenses])
+
+  const handleAddLicense = (id: string) => {
+    if (!licenseIds.includes(id)) {
+      setLicenseIds((prev) => [...prev, id])
     }
   }
 
-  const handleRemoveLicense = (license: string) => {
-    setLicenses((prev) => prev.filter((l) => l !== license))
+  const handleRemoveLicense = (id: string) => {
+    setLicenseIds((prev) => prev.filter((l) => l !== id))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setApiError(null)
 
-    // Validação local de formulário
     const newErrors: { [key: string]: string } = {}
     if (!name.trim()) newErrors.name = 'O nome completo é obrigatório.'
     const cleanCpf = cpf.replace(/\D/g, '')
     if (cleanCpf.length !== 11) newErrors.cpf = 'O CPF deve conter exatamente 11 dígitos.'
     if (!username.trim()) newErrors.username = 'O nome de usuário é obrigatório.'
     if (!isEditing && !password.trim()) newErrors.password = 'A senha é obrigatória para novos motoristas.'
-    if (!isEditing && password.length > 0 && password.length < 6) newErrors.password = 'A senha deve ter pelo menos 6 caracteres.'
+    if (password.length > 0 && password.length < 6) newErrors.password = 'A senha deve ter pelo menos 6 caracteres.'
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -76,18 +76,14 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
     setIsSubmitting(true)
 
     try {
-      // Aguarda a resposta do backend enviada via prop onSave
       await onSave({
         name: name.trim(),
         cpf: cleanCpf,
         username: username.trim(),
         password: password || undefined,
-        licenses,
-        status,
-        vehicleId: initialDriver && 'vehicleId' in initialDriver ? initialDriver.vehicleId : undefined,
+        licenseIds,
       })
     } catch (err: any) {
-      // Exibe a mensagem de erro da API na tela e mantém o formulário aberto
       setApiError(err.message || 'Erro ao salvar motorista. Tente novamente.')
     } finally {
       setIsSubmitting(false)
@@ -98,10 +94,10 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
     <div>
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            icon={<ArrowLeft size={16} />} 
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<ArrowLeft size={16} />}
             onClick={onCancel}
             disabled={isSubmitting}
           >
@@ -120,7 +116,6 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
 
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         <form onSubmit={handleSubmit}>
-          {/* Banner para exibir erros vindos da API */}
           {apiError && (
             <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3 text-red-700">
               <AlertCircle size={20} className="shrink-0" />
@@ -128,7 +123,6 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             </div>
           )}
 
-          {/* Seção: Dados Pessoais do Motorista */}
           <div className="mb-4 pb-6 border-b border-slate-200">
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
               Dados Pessoais do Condutor
@@ -183,7 +177,6 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             </div>
           </div>
 
-          {/* Seção: Conta de Acesso (Usuário) */}
           <div className="mb-4 pb-6 border-b border-slate-200" style={{ marginTop: '2rem' }}>
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
               Conta de Acesso (Usuário)
@@ -240,18 +233,16 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
             </div>
           </div>
 
-          {/* Seção: Licenças e Status */}
           <div className="mb-4 pb-6 border-b border-slate-200" style={{ marginTop: '2rem' }}>
             <h2 className="text-base font-semibold text-slate-800 tracking-tight">
-              Licenças e Status Operacional
+              Licenças
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Gerencie as licenças do motorista e defina seu status inicial.
+              Gerencie as licenças do motorista.
             </p>
           </div>
 
           <div className="space-y-4">
-            {/* Gerenciamento de Licenças */}
             <div className="flex flex-col gap-2">
               <Label className="text-sm font-semibold text-slate-700">
                 Licenças Atribuídas
@@ -260,17 +251,17 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                 Licenças que habilitam o motorista para tipos específicos de transporte.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
-                {licenses.map((license) => (
-                  <Badge key={license} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
-                    {license}
+                {licenseIds.map((id) => (
+                  <Badge key={id} variant="primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
+                    {dbLicenses.find((l) => l.id === id)?.name ?? id}
                     <X
                       size={12}
                       style={{ opacity: 0.7 }}
-                      onClick={() => handleRemoveLicense(license)}
+                      onClick={() => handleRemoveLicense(id)}
                     />
                   </Badge>
                 ))}
-                {licenses.length === 0 && (
+                {licenseIds.length === 0 && (
                   <span className="text-xs text-slate-400">Nenhuma licença atribuída.</span>
                 )}
               </div>
@@ -287,11 +278,11 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                     backgroundColor: 'var(--color-bg-card)',
                   }}
                   defaultValue=""
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                 >
                   <option value="" disabled>Selecione uma licença para adicionar...</option>
-                  {AVAILABLE_LICENSES.filter((l) => !licenses.includes(l)).map((l) => (
-                    <option key={l} value={l}>{l}</option>
+                  {dbLicenses.filter((l) => !licenseIds.includes(l.id)).map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
                 <Button
@@ -299,7 +290,7 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                   variant="outline"
                   size="sm"
                   icon={<Plus size={14} />}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingLicenses}
                   onClick={() => {
                     const select = document.getElementById('driver-license-select') as HTMLSelectElement
                     if (select?.value) {
@@ -311,21 +302,6 @@ export const DriverFormPage: React.FC<DriverFormPageProps> = ({
                   Adicionar
                 </Button>
               </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="driver-status" className="text-sm font-semibold text-slate-700">Status Inicial</Label>
-              <Select
-                id="driver-status"
-                value={status}
-                disabled={isSubmitting}
-                onChange={(e) => setStatus(e.target.value as DriverStatus)}
-                options={[
-                  { value: 'free', label: 'Disponível (Livre)' },
-                  { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-                  { value: 'onRoute', label: 'Em Rota' },
-                ]}
-              />
             </div>
 
             {isEditing && initialDriver && (

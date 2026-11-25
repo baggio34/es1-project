@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
-import type { Driver } from '../../models/driver.ts'
+import type { DriverPreview } from '../../../../sdk/src/models/user.ts'
+import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
+import type { VehiclePreview, VehicleSignature } from '../../../../sdk/src/models/vehicle.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
@@ -11,9 +13,9 @@ import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface DriverListPageProps {
-  drivers: Driver[]
-  routes?: any[]
-  vehicles?: any[]
+  drivers: DriverPreview[]
+  routes?: (RoutePreview | RouteWithOrders)[]
+  vehicles?: (VehiclePreview | VehicleSignature)[]
   onViewDetails: (id: string) => void
   onEdit: (id: string) => void
   onCreate: () => void
@@ -32,18 +34,18 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
   onReload,
 }) => {
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'manager'
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
 
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null)
+  const [driverToDelete, setDriverToDelete] = useState<DriverPreview | null>(null)
 
   const filteredDrivers = drivers.filter((driver) => {
-    const d = driver as any
     const matchesSearch =
-      (d.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (d.cpf || '').includes(searchTerm)
-    const matchesStatus = statusFilter === 'all' || d.status === statusFilter
+      driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      driver.cpf.includes(searchTerm) ||
+      driver.username.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || driver.transportState === statusFilter
     return matchesSearch && matchesStatus
   })
 
@@ -73,7 +75,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
           <Search size={16} />
           <Input
             className="pl-10"
-            placeholder="Buscar por nome ou CPF..."
+            placeholder="Buscar por nome, usuário ou CPF..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -84,16 +86,15 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
             Status:
           </span>
           <Select
-            style={{ width: '200px' }}
+            style={{ width: '220px' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             options={[
               { value: 'all', label: 'Todos os Status' },
-              { value: 'free', label: 'Disponível' },
-              { value: 'waitingOperatorOrder', label: 'Em Montagem de Rota' },
-              { value: 'waitingDispatch', label: 'Aguardando Despacho' },
-              { value: 'readyToDispatch', label: 'Aguardando Saída' },
-              { value: 'onRoute', label: 'Em Rota' },
+              { value: 'FREE', label: 'Disponível' },
+              { value: 'WAITING_OPERATOR_AUTHORIZATION', label: 'Em Montagem de Rota' },
+              { value: 'WAITING_DRIVER_DISPATCH', label: 'Aguardando Despacho' },
+              { value: 'ON_ROUTE', label: 'Em Rota' },
             ]}
           />
         </div>
@@ -121,26 +122,30 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
             </TableRow>
           ) : (
             filteredDrivers.map((driver) => {
-              const d = driver as any
-              
-              const activeRoute = d.status !== 'free' ? routes?.find(r => r.id === d.routeId && r.status !== 'completed') : undefined
-              
-              const vehicle = activeRoute?.vehicleId 
-                ? vehicles?.find(v => v.plate === activeRoute.vehicleId || v.id === activeRoute.vehicleId) 
+              const assignedRoute = driver.transportState !== 'FREE' ? driver.route : undefined
+              const detailedRoute = assignedRoute
+                ? routes?.find((r) => r.id === assignedRoute.id) ?? assignedRoute
                 : undefined
-              
-              const hasVehicle = !!vehicle
-              const orderCount = activeRoute?.orders?.length || activeRoute?.orderIds?.length || 0
+
+              const routeVehicle = detailedRoute?.vehicle
+              const vehicle = routeVehicle
+                ? vehicles?.find((v) => v.plate === routeVehicle.plate || v.id === routeVehicle.id) ?? routeVehicle
+                : undefined
+
+              const orderCount =
+                detailedRoute && 'orders' in detailedRoute && Array.isArray(detailedRoute.orders)
+                  ? detailedRoute.orders.length
+                  : 0
 
               return (
-                <TableRow key={d.username || d.id}>
-                  <TableCell style={{ fontWeight: 600 }}>{d.name}</TableCell>
-                  <TableCell className="detail-value-mono">{formatReg(d.cpf)}</TableCell>
-                  <TableCell>{getDriverStatusBadge(d.status)}</TableCell>
+                <TableRow key={driver.username}>
+                  <TableCell style={{ fontWeight: 600 }}>{driver.name}</TableCell>
+                  <TableCell className="detail-value-mono">{formatReg(driver.cpf)}</TableCell>
+                  <TableCell>{getDriverStatusBadge(driver.transportState)}</TableCell>
                   <TableCell>
-                    {hasVehicle ? (
+                    {vehicle ? (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-primary)', fontWeight: 500 }}>
-                        {vehicle?.plate?.toUpperCase()}
+                        {vehicle.plate.toUpperCase()}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--color-text-muted)' }}>Nenhum</span>
@@ -160,7 +165,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
                         size="sm"
                         icon={<Eye size={15} />}
                         title="Ver Detalhes"
-                        onClick={() => onViewDetails(d.username || d.id)}
+                        onClick={() => onViewDetails(driver.username)}
                       />
                       {canEdit && (
                         <>
@@ -169,7 +174,7 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
                             size="sm"
                             icon={<Pencil size={15} />}
                             title="Editar Motorista"
-                            onClick={() => onEdit(d.username || d.id)}
+                            onClick={() => onEdit(driver.username)}
                           />
                           <Button
                             variant="ghost"
@@ -198,15 +203,14 @@ export const DriverListPage: React.FC<DriverListPageProps> = ({
         confirmVariant="destructive"
         onConfirm={() => {
           if (driverToDelete) {
-            const d = driverToDelete as any
-            onDelete(d.username || d.id)
+            onDelete(driverToDelete.username)
             setDriverToDelete(null)
           }
         }}
       >
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
           Deseja realmente excluir o motorista{' '}
-          <strong>{(driverToDelete as any)?.name}</strong> (CPF: {driverToDelete ? formatReg((driverToDelete as any).cpf) : ''})?
+          <strong>{driverToDelete?.name}</strong> (CPF: {driverToDelete ? formatReg(driverToDelete.cpf) : ''})?
         </p>
       </Modal>
     </div>

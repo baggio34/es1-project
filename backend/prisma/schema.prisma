@@ -249,7 +249,7 @@ model Order {
 	loadedById String?
 	loadedOn   DateTime?
   route      Route?  @relation(fields: [routeId], references: [id], onDelete: SetNull)
-	routeId    String? @unique
+	routeId    String?
   routeIndex Int? // Ordem do pedido dentro da rota  
 
 

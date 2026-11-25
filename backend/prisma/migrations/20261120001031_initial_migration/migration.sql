@@ -93,7 +93,7 @@ CREATE TABLE "Vehicles" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Vehicles_plate_length" CHECK (LENGTH("plate") = 8),
+    CONSTRAINT "Vehicles_plate_length" CHECK (LENGTH("plate") = 7),
     CONSTRAINT "Vehicles_pkey" PRIMARY KEY ("id")
 );
 
@@ -196,9 +196,6 @@ CREATE INDEX "Vehicles_transportState_idx" ON "Vehicles"("transportState");
 
 -- CreateIndex
 CREATE INDEX "VehiclesToLicenses_licenseId_idx" ON "VehiclesToLicenses"("licenseId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Orders_routeId_key" ON "Orders"("routeId");
 
 -- CreateIndex
 CREATE INDEX "Orders_status_idx" ON "Orders"("status");

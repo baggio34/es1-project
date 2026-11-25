@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import { userApi } from '../api/userApi.ts'
-import type { User, UserRegistrationPayload } from '../models/user.ts'
+import type { UserPreview } from '../../../sdk/src/models/user.ts'
+import type { CreateUserRequest, UpdateUserRequest } from '../../../sdk/src/dtos/user.dto.ts'
 
 export function useUser() {
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<UserPreview[]>([])
   const [loading, setLoading] = useState(false)
 
   const loadUsers = useCallback(async () => {
@@ -18,10 +19,15 @@ export function useUser() {
     }
   }, [])
 
-  const registerUser = async (data: UserRegistrationPayload) => {
+  const registerUser = async (data: CreateUserRequest) => {
     await userApi.register(data)
     await loadUsers()
   }
 
-  return { users, loading, loadUsers, registerUser, api: userApi }
+  const updateUser = async (username: string, data: Partial<UpdateUserRequest>) => {
+    await userApi.patch(username, data)
+    await loadUsers()
+  }
+
+  return { users, loading, loadUsers, registerUser, updateUser, api: userApi }
 }

@@ -1,22 +1,50 @@
-import React, { useState } from 'react'
-import type { Route } from '../../models/route.ts'
-import type { Order } from '../../models/order.ts'
+import React, { useState, useEffect } from 'react'
+import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
+import type { OrderSignature, OrderStatusEnum } from '../../../../sdk/src/models/order.ts'
+import { routeApi } from '../../api/routeApi.ts'
 import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { ArrowLeft, Truck, Package, CheckCircle, XCircle, User, GripVertical, ChevronUp, ChevronDown } from 'lucide-react'
-import { getRouteStatusBadge, getOrderStatusBadge } from '../../utils/formatters.tsx'
+import { getRouteStatusBadge, getOrderStatusBadge, formatReg } from '../../utils/formatters.tsx'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
+export type RouteOrderItem = OrderSignature & {
+  description?: string
+  arrivedOn?: string
+  accidentOn?: string
+}
+
 export interface RouteDetailPageProps {
-  route: Route
-  orders: Order[]
+  route: RouteWithOrders | RoutePreview
+  orders?: RouteOrderItem[]
   onBack: () => void
   onViewOrder: (orderId: string) => void
-  onViewDriver: (driverId: string) => void
-  onViewVehicle: (vehicleId: string) => void
+  onViewDriver: (driverUsername: string) => void
+  onViewVehicle: (vehiclePlate: string) => void
   onAuthorizeDispatch?: (id: string) => void
   onUnauthorizeDispatch?: (id: string) => void
+}
+
+const EMPTY_ORDERS: RouteOrderItem[] = []
+
+const isRouteWithOrders = (r: RouteWithOrders | RoutePreview): r is RouteWithOrders =>
+  'createdBy' in r && Boolean(r.createdBy)
+
+const sortOrdersByRouteIndex = (list: RouteOrderItem[]): RouteOrderItem[] =>
+  [...list].sort((a, b) => (a.routeIndex ?? 0) - (b.routeIndex ?? 0))
+
+const formatDateTime = (date?: string): string => {
+  if (!date) return ''
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
@@ -30,17 +58,64 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
   onUnauthorizeDispatch,
 }) => {
   const { user } = useAuth()
-  const userRole = user?.role?.toLowerCase()
-  const canReorder = ['admin', 'manager', 'operator'].includes(userRole || '') && route.status !== 'completed'
+  const [detailedRoute, setDetailedRoute] = useState<RouteWithOrders | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
 
-  const [prevOrders, setPrevOrders] = useState(orders)
-  const [orderedOrders, setOrderedOrders] = useState<Order[]>(orders)
+  const hasFullDetails = isRouteWithOrders(route)
+
+  useEffect(() => {
+    if (hasFullDetails) return
+
+    let cancelled = false
+    setLoadingDetails(true)
+
+    routeApi
+      .getById(route.id)
+      .then((data) => {
+        if (!cancelled) {
+          setDetailedRoute(data)
+        }
+      })
+      .catch((error) => {
+        console.error('Erro ao carregar detalhes da rota:', error)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingDetails(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [route.id, route.status, hasFullDetails])
+
+  const activeRoute: RouteWithOrders | RoutePreview = hasFullDetails
+    ? route
+    : detailedRoute && detailedRoute.id === route.id
+      ? detailedRoute
+      : route
+
+  const fullRoute: RouteWithOrders | null = isRouteWithOrders(activeRoute) ? activeRoute : null
+
+  const canReorder =
+    ['ADMIN', 'MANAGER', 'OPERATOR'].includes(user?.role ?? '') &&
+    activeRoute.status !== 'COMPLETED'
+
+  const routeOrders: RouteOrderItem[] = fullRoute?.orders ?? EMPTY_ORDERS
+  const sourceOrders: RouteOrderItem[] = orders && orders.length > 0 ? orders : routeOrders
+  const ordersKey = `${activeRoute.id}:${sourceOrders.map((o) => `${o.id}:${o.status}:${o.routeIndex ?? ''}`).join('|')}`
+
+  const [prevOrdersKey, setPrevOrdersKey] = useState<string>(ordersKey)
+  const [orderedOrders, setOrderedOrders] = useState<RouteOrderItem[]>(() =>
+    sortOrdersByRouteIndex(sourceOrders)
+  )
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
-  if (orders !== prevOrders) {
-    setPrevOrders(orders)
-    setOrderedOrders(orders)
+  if (ordersKey !== prevOrdersKey) {
+    setPrevOrdersKey(ordersKey)
+    setOrderedOrders(sortOrdersByRouteIndex(sourceOrders))
   }
 
   const moveOrder = (fromIndex: number, toIndex: number) => {
@@ -79,7 +154,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
     setDragOverIndex(null)
   }
 
-  const orderCount = orderedOrders?.length || route.orders?.length || 0
+  const orderCount = orderedOrders.length
 
   return (
     <div>
@@ -89,33 +164,37 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
             Voltar à Lista
           </Button>
           <div>
-            <h1 className="page-title">Rota de Entrega #{route.id.slice(0, 8)}</h1>
-            <p className="page-description">
-              UUID: {route.id}
-            </p>
+            <h1 className="page-title">Rota de Entrega #{activeRoute.id.slice(0, 8)}</h1>
+            {fullRoute ? (
+              <p className="page-description">
+                Criada em {formatDateTime(fullRoute.createdAt)} por {fullRoute.createdBy.name} (@{fullRoute.createdBy.username})
+              </p>
+            ) : (
+              <p className="page-description">UUID: {activeRoute.id}</p>
+            )}
           </div>
         </div>
         <div className="page-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          {route.status === 'waitingOperatorOrder' && (
-            <Button 
-              variant="default" 
-              icon={<CheckCircle size={16} />} 
-              onClick={() => onAuthorizeDispatch?.(route.id)}
+          {activeRoute.status === 'WAITING_OPERATOR_AUTHORIZATION' && (
+            <Button
+              variant="default"
+              icon={<CheckCircle size={16} />}
+              onClick={() => onAuthorizeDispatch?.(activeRoute.id)}
             >
               Autorizar Saída
             </Button>
           )}
-          {route.status === 'readyToDispatch' && (
-            <Button 
-              variant="outline" 
-              style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }} 
-              icon={<XCircle size={16} />} 
-              onClick={() => onUnauthorizeDispatch?.(route.id)}
+          {activeRoute.status === 'WAITING_DRIVER_DISPATCH' && (
+            <Button
+              variant="outline"
+              style={{ color: 'var(--color-danger-text)', borderColor: 'var(--color-danger-border)' }}
+              icon={<XCircle size={16} />}
+              onClick={() => onUnauthorizeDispatch?.(activeRoute.id)}
             >
               Desautorizar Saída
             </Button>
           )}
-          {getRouteStatusBadge(route.status)}
+          {getRouteStatusBadge(activeRoute.status)}
         </div>
       </div>
 
@@ -126,14 +205,28 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
               <User size={18} color="var(--color-primary)" />
               <CardTitle>Motorista Responsável</CardTitle>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => onViewDriver(route.driverId)}>Ver Motorista</Button>
+            <Button variant="ghost" size="sm" onClick={() => onViewDriver(activeRoute.driver.username)}>
+              Ver Motorista
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="details-grid" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="detail-item">
-                <span className="detail-label">ID do Motorista</span>
-                <span className="detail-value detail-value-mono">{route.driverId}</span>
+                <span className="detail-label">Nome</span>
+                <span className="detail-value">{activeRoute.driver.name}</span>
               </div>
+              <div className="detail-item">
+                <span className="detail-label">Usuário</span>
+                <span className="detail-value detail-value-mono">@{activeRoute.driver.username}</span>
+              </div>
+              {fullRoute && fullRoute.status !== 'WAITING_OPERATOR_AUTHORIZATION' && (
+                <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                  <span className="detail-label">Despacho Autorizado Por</span>
+                  <span className="detail-value">
+                    {fullRoute.dispatchApprovedBy.name} em {formatDateTime(fullRoute.dispatchApprovedOn)}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -144,14 +237,32 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
               <Truck size={18} color="var(--color-primary)" />
               <CardTitle>Veículo Alocado</CardTitle>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => onViewVehicle(route.vehicleId)}>Ver Veículo</Button>
+            <Button variant="ghost" size="sm" onClick={() => onViewVehicle(activeRoute.vehicle.plate)}>
+              Ver Veículo
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="details-grid" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="detail-item">
-                <span className="detail-label">ID do Veículo</span>
-                <span className="detail-value detail-value-mono">{route.vehicleId}</span>
+                <span className="detail-label">Placa</span>
+                <span className="detail-value detail-value-mono">{activeRoute.vehicle.plate.toUpperCase()}</span>
               </div>
+              <div className="detail-item">
+                <span className="detail-label">Modelo / Cor</span>
+                <span className="detail-value">{activeRoute.vehicle.model} ({activeRoute.vehicle.color})</span>
+              </div>
+              {fullRoute && (fullRoute.status === 'ON_COURSE' || fullRoute.status === 'COMPLETED') && (
+                <div className="detail-item">
+                  <span className="detail-label">Início do Percurso</span>
+                  <span className="detail-value">{formatDateTime(fullRoute.routeStartedOn)}</span>
+                </div>
+              )}
+              {fullRoute && fullRoute.status === 'COMPLETED' && (
+                <div className="detail-item">
+                  <span className="detail-label">Conclusão da Rota</span>
+                  <span className="detail-value">{formatDateTime(fullRoute.routeCompletedOn)}</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -172,9 +283,13 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
           </div>
         </CardHeader>
         <CardContent style={{ padding: 0 }}>
-          {orderedOrders.length === 0 ? (
+          {loadingDetails && orderedOrders.length === 0 ? (
             <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-              Nenhum pedido vinculado a esta rota ou erro ao carregar os pedidos.
+              Carregando pedidos da rota...
+            </div>
+          ) : orderedOrders.length === 0 ? (
+            <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+              Nenhum pedido vinculado a esta rota.
             </div>
           ) : (
             <Table>
@@ -182,7 +297,7 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                 <TableRow>
                   <TableHead className="w-[100px]">Sequência</TableHead>
                   <TableHead className="w-[110px]">Código</TableHead>
-                  <TableHead className="min-w-[200px]">Descrição da Carga</TableHead>
+                  <TableHead className="min-w-[200px]">Cliente / Carga</TableHead>
                   <TableHead className="min-w-[180px]">Destino</TableHead>
                   <TableHead className="min-w-[140px]">Status</TableHead>
                   <TableHead className="min-w-[140px]">Horário Status</TableHead>
@@ -192,10 +307,10 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
               <TableBody>
                 {orderedOrders.map((order, idx) => {
                   let statusTime = ''
-                  if (order.status === 'arrived' && 'arrivedOn' in order) {
-                     statusTime = new Date(order.arrivedOn as string).toLocaleString('pt-BR')
-                  } else if (order.status === 'accident' && 'accidentTime' in order) {
-                     statusTime = new Date(order.accidentTime as string).toLocaleString('pt-BR')
+                  if (order.status === 'ARRIVED' && order.arrivedOn) {
+                    statusTime = formatDateTime(order.arrivedOn)
+                  } else if (order.status === 'ACCIDENT' && order.accidentOn) {
+                    statusTime = formatDateTime(order.accidentOn)
                   }
 
                   const isDragging = draggedIndex === idx
@@ -294,16 +409,26 @@ export const RouteDetailPage: React.FC<RouteDetailPageProps> = ({
                           #{order.id}
                         </span>
                       </TableCell>
-                      <TableCell style={{ fontWeight: 600 }}>{order.description}</TableCell>
+                      <TableCell>
+                        <div style={{ fontWeight: 600 }}>
+                          {order.description || order.clientName}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                          {order.description ? `${order.clientName} • ` : ''}
+                          {formatReg(order.clientRegistration)}
+                        </div>
+                      </TableCell>
                       <TableCell style={{ maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {order.destination}
                       </TableCell>
-                      <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
+                      <TableCell>{getOrderStatusBadge(order.status as OrderStatusEnum)}</TableCell>
                       <TableCell style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
                         {statusTime || '--'}
                       </TableCell>
                       <TableCell style={{ textAlign: 'right' }}>
-                        <Button variant="ghost" size="sm" onClick={() => onViewOrder(String(order.id))}>Ver Pedido</Button>
+                        <Button variant="ghost" size="sm" onClick={() => onViewOrder(String(order.id))}>
+                          Ver Pedido
+                        </Button>
                       </TableCell>
                     </TableRow>
                   )

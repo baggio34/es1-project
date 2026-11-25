@@ -46,6 +46,15 @@ export const requireOperator: RequestHandler = async (req, res, next) => {
   next()
 }
 
+export const requireOperatorOrDriver: RequestHandler = async (req, res, next) => {
+  if (!isOperator(req.user) && !isDriver(req.user)) {
+    res.status(401).send({ error: "This action can only be performed by operators or drivers." })
+    return
+  }
+
+  next()
+}
+
 export const requireAdmin: RequestHandler = async (req, res, next) => {
   if (!isAdmin(req.user)) {
     res.status(401).send({ error: "This action can only be performed by admins." })
