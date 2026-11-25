@@ -165,6 +165,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         break
       case 'ON_ROUTE':
         userRaw = route?.driver
+        if ('route' in order && order.route && 'routeStartedOn' in order.route) dateRaw = order.route.routeStartedOn
         break
       case 'ARRIVED':
         userRaw = route?.driver
