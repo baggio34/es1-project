@@ -4,6 +4,7 @@ import { RouteManager } from '@/domain/route.manager.ts'
 import { UserManager } from '@/domain/user.manager.ts'
 import { VehicleManager } from '@/domain/vehicle.manager.ts'
 import type { CancelOrderRequest, CreateOrderRequest, GetOrderReply, GetOrdersReply, LoadOrderRequest, RejectOrderRequest, ReportOrderAccidentRequest, ResolveOrderAccidentRequest, UpdateOrderRequest } from '@/dtos/order.dto.ts'
+import type { GetRouteSuggestionsReply } from '@/dtos/route.dto.ts'
 import { requireClerk, requireDriver, requireManager, requireOperator, requireOperatorOrClerk } from '@/services/auth/authorization.ts'
 import express, { type NextFunction, type Request, type Response } from 'express'
 
@@ -16,6 +17,7 @@ export const orderRouter = express.Router()
   .post("/:id/reject", requireOrder, requireOperator, handleRejectOrder)
   .post("/:id/approve", requireOrder, requireOperator, handleApproveOrder)
   .post("/:id/confirm-payment", requireOrder, requireClerk, handleConfirmOrderPayment)
+  .get("/:id/suggestions", requireOrder, requireOperator, handleGetOrderSuggestions)
   .post("/:id/load", requireOrder, requireOperator, handleLoadOrder)
   .post("/:id/unload", requireOrder, requireOperator, handleUnloadOrder)
   .post("/:id/confirm-arrival", requireOrder, requireDriver, handleConfirmOrderArrival)
@@ -83,6 +85,12 @@ async function handleConfirmOrderPayment(req: Request<{}, ApiResult<string>>, re
   const result = await OrderManager.getInstance().confirmPayment(req.user!, req.order!)
 
   res.status(result.isErr ? 400 : 200).send(result.map(() => "confirmed").toApiResult())
+}
+
+async function handleGetOrderSuggestions(req: Request<{}, ApiResult<GetRouteSuggestionsReply>>, res: Response) {
+  const result = await RouteManager.getInstance().routeSuggestions(req.order!)
+
+  res.status(result.isErr ? 400 : 200).send(result.toApiResult())
 }
 
 async function handleLoadOrder(req: Request<{}, ApiResult<string>, LoadOrderRequest>, res: Response) {

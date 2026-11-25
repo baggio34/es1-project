@@ -4,6 +4,7 @@ import type {
   RejectOrderRequest, CancelOrderRequest, LoadOrderRequest,
   ReportOrderAccidentRequest, ResolveOrderAccidentRequest,
 } from '../../../sdk/src/dtos/order.dto.ts'
+import type { GetRouteSuggestionsReply } from '../../../sdk/src/dtos/route.dto.ts'
 
 export const orderApi = {
   create: (data: CreateOrderRequest) =>
@@ -32,6 +33,9 @@ export const orderApi = {
 
   load: (id: number | string, data: LoadOrderRequest) =>
     apiFetch<string>(`/orders/${id}/load`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getSuggestions: (id: number | string) =>
+    apiFetch<GetRouteSuggestionsReply>(`/orders/${id}/suggestions`),
 
   unload: (id: number | string) =>
     apiFetch<string>(`/orders/${id}/unload`, { method: 'POST' }),

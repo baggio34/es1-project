@@ -4,10 +4,12 @@ import { Button } from '../../components/ui/button.tsx'
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card.tsx'
 import { Modal } from '../../components/ui/Modal.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
-import { ArrowLeft, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map as MapIcon, User } from 'lucide-react'
+import { ArrowLeft, Package, MapPin, Truck, AlertTriangle, CheckCircle, Clock, Check, X, CreditCard, Box, Map as MapIcon, User, Sparkles, Edit3 } from 'lucide-react'
 import { getOrderStatusBadge, formatReg } from '../../utils/formatters.tsx'
 import type { DriverPreview, UserSignature } from '../../../../sdk/src/models/user.ts'
 import type { VehicleDetailed, VehiclePreview } from '../../../../sdk/src/models/vehicle.ts'
+import type { GetRouteSuggestionsReply } from '../../../../sdk/src/dtos/route.dto.ts'
+import { orderApi } from '../../api/orderApi.ts'
 import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export interface OrderDetailPageProps {
@@ -54,6 +56,50 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
   const [loadModalOpen, setLoadModalOpen] = useState(false)
   const [loadDriverId, setLoadDriverId] = useState('')
   const [loadVehicleId, setLoadVehicleId] = useState('')
+  const [suggestionsData, setSuggestionsData] = useState<GetRouteSuggestionsReply | null>(null)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
+  const [isManualEdit, setIsManualEdit] = useState(false)
+
+  const openLoadModal = () => {
+    setLoadModalOpen(true)
+    if (order.status !== 'IN_PREPARATION') return
+
+    setLoadingSuggestions(true)
+    setSuggestionsError(null)
+    setSuggestionsData(null)
+    setIsManualEdit(false)
+    setLoadVehicleId('')
+    setLoadDriverId('')
+
+    orderApi
+      .getSuggestions(order.id)
+      .then((data) => {
+        setSuggestionsData(data)
+        const suggestedVehicleIds = Object.keys(data.suggestions || {})
+        if (suggestedVehicleIds.length > 0) {
+          const firstId = suggestedVehicleIds[0]!
+          const veh = data.vehicles[firstId]
+          const drv = data.suggestions[firstId]
+          if (veh && drv) {
+            setLoadVehicleId(veh.plate)
+            setLoadDriverId(drv.username)
+            setIsManualEdit(false)
+          } else {
+            setIsManualEdit(true)
+          }
+        } else {
+          setIsManualEdit(true)
+        }
+      })
+      .catch((err: any) => {
+        setSuggestionsError(err?.message || 'Não foi possível carregar as sugestões automáticas.')
+        setIsManualEdit(true)
+      })
+      .finally(() => {
+        setLoadingSuggestions(false)
+      })
+  }
 
   const currentIndex = statusOrderList.findIndex((s) => s.key === order.status)
   const isRejected = order.status === 'REJECTED'
@@ -160,7 +206,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         )
       case 'IN_PREPARATION':
         return (
-          <Button variant="default" icon={<Box size={16} />} onClick={() => setLoadModalOpen(true)}>
+          <Button variant="default" icon={<Box size={16} />} onClick={openLoadModal}>
             Carregar Pedido
           </Button>
         )
@@ -462,6 +508,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         const hasLicenseError = isVehicleMissingLicense
 
         const canConfirmLoad = Boolean(
+          !loadingSuggestions &&
           loadDriverId &&
           loadVehicleId &&
           !hasCapacityError &&
@@ -469,13 +516,19 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           !isStateMismatch
         )
 
+        const suggestedVehicleIds = suggestionsData ? Object.keys(suggestionsData.suggestions || {}) : []
+        const firstSuggestedId = suggestedVehicleIds[0]
+        const suggestedVehicle = firstSuggestedId && suggestionsData ? suggestionsData.vehicles[firstSuggestedId] : undefined
+        const suggestedDriver = firstSuggestedId && suggestionsData ? suggestionsData.suggestions[firstSuggestedId] : undefined
+        const hasSuggestion = Boolean(suggestedVehicle && suggestedDriver)
+
         return (
           <Modal
             isOpen={loadModalOpen}
             onClose={() => setLoadModalOpen(false)}
             title="Carregar Pedido em Veículo"
             description="Selecione o motorista e o veículo adequados para realizar a entrega desta carga."
-            confirmText="Confirmar Carregamento"
+            confirmText={hasSuggestion && !isManualEdit ? 'Aprovar Sugestão Automática' : 'Confirmar Carregamento'}
             confirmDisabled={!canConfirmLoad}
             onConfirm={() => {
               if (!canConfirmLoad) return
@@ -510,139 +563,277 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
                 </div>
               </div>
 
-              <div className="ui-form-group">
-                <label className="ui-label" style={{ fontWeight: 600 }}>1. Veículo de Transporte *</label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-                  value={loadVehicleId}
-                  onChange={(e) => {
-                    const nextVehicle = e.target.value
-                    setLoadVehicleId(nextVehicle)
-                    setLoadDriverId('')
-                  }}
-                >
-                  <option value="">Selecione um veículo com capacidade suficiente...</option>
-                  {activeVehicles.map((v) => {
-                    const isUnavailable = v.transportState === 'ON_ROUTE' || v.transportState === 'WAITING_DRIVER_DISPATCH'
-                    const isAssembling = v.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
-                    const isUnderWeight = Number(order.weight) > Number(v.maxLoad)
-                    const isUnderVolume = Number(order.volume) > Number(v.internalVolume)
-                    const capacityWarning = (isUnderWeight || isUnderVolume) ? ' ⚠️ [Capacidade Insuficiente]' : ''
-                    const stateLabel = isUnavailable
-                      ? ' (Indisponível)'
-                      : isAssembling
-                        ? ' (Em Montagem de Rota)'
-                        : ' (Disponível)'
-                    return (
-                      <option key={v.plate} value={v.plate} disabled={isUnavailable}>
-                        {v.plate} - {v.model} (Carga: {v.maxLoad}kg | Vol: {v.internalVolume}m³){stateLabel}{capacityWarning}
-                      </option>
-                    )
-                  })}
-                </select>
-              </div>
-
-              {selectedVehicleObj && (
+              {loadingSuggestions && (
                 <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
                   padding: '0.75rem',
                   borderRadius: 'var(--radius-md)',
-                  border: `1px solid ${hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
-                  backgroundColor: hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.05)' : 'rgba(34, 197, 94, 0.05)',
-                  fontSize: '0.8125rem'
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-bg-subtle)',
+                  fontSize: '0.8125rem',
+                  color: 'var(--color-text-secondary)',
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Capacidade de Carga ({selectedVehicleObj.maxLoad} kg máx):</span>
-                    {isWeightExceeded ? (
-                      <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
-                        Insuficiente ({order.weight} kg &gt; {selectedVehicleObj.maxLoad} kg)
-                      </span>
-                    ) : (
-                      <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                        Compatível ({order.weight} kg / {selectedVehicleObj.maxLoad} kg)
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Capacidade Volumétrica ({selectedVehicleObj.internalVolume} m³ máx):</span>
-                    {isVolumeExceeded ? (
-                      <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
-                        Insuficiente ({order.volume} m³ &gt; {selectedVehicleObj.internalVolume} m³)
-                      </span>
-                    ) : (
-                      <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                        Compatível ({order.volume} m³ / {selectedVehicleObj.internalVolume} m³)
-                      </span>
-                    )}
-                  </div>
-
-                  {isVehicleMissingLicense && (
-                    <div style={{ color: 'var(--color-danger-text)', fontWeight: 500, marginTop: '0.25rem' }}>
-                      Veículo não possui as licenças: {missingVehicleLicenses.join(', ')}
-                    </div>
-                  )}
+                  Buscando sugestão automática de veículo e motorista compatíveis...
                 </div>
               )}
 
-              <div
-                className="ui-form-group"
-                style={{
-                  opacity: loadVehicleId ? 1 : 0.5,
-                  transition: 'opacity 0.2s ease',
-                  cursor: loadVehicleId ? 'default' : 'not-allowed',
-                }}
-              >
-                <label
-                  className="ui-label"
-                  style={{
-                    fontWeight: 600,
-                    color: loadVehicleId ? 'inherit' : 'var(--color-text-muted)',
-                    cursor: loadVehicleId ? 'default' : 'not-allowed',
-                  }}
-                >
-                  2. Motorista Responsável *
-                </label>
-                <select
-                  disabled={!loadVehicleId}
-                  className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
-                  value={loadDriverId}
-                  onChange={(e) => setLoadDriverId(e.target.value)}
-                >
-                  <option value="">
-                    {loadVehicleId ? 'Selecione um motorista...' : 'Bloqueado: selecione primeiro um veículo acima...'}
-                  </option>
-                  {activeDrivers.map((d) => {
-                    const isBusy = d.transportState === 'ON_ROUTE' || d.transportState === 'WAITING_DRIVER_DISPATCH'
-                    const isDifferentState = !!selectedVehicleObj && d.transportState !== selectedVehicleObj.transportState
-                    const isDifferentRoute =
-                      !!selectedVehicleObj &&
-                      d.transportState === 'WAITING_OPERATOR_AUTHORIZATION' &&
-                      d.route.vehicle.plate !== selectedVehicleObj.plate
-                    const isDisabled = isBusy || isDifferentState || isDifferentRoute
+              {!loadingSuggestions && suggestionsError && (
+                <div style={{
+                  padding: '0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                  fontSize: '0.8125rem',
+                  color: '#b45309',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem',
+                }}>
+                  <strong>Não foi possível obter a sugestão automática</strong>
+                  <span>{suggestionsError} Você pode selecionar o veículo e o motorista manualmente abaixo.</span>
+                </div>
+              )}
 
-                    const statusLabel =
-                      d.transportState === 'FREE'
-                        ? ' (Disponível)'
-                        : d.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
-                          ? ` (Em Montagem de Rota - ${d.route.vehicle.plate})`
-                          : ' (Indisponível)'
+              {!loadingSuggestions && !suggestionsError && !hasSuggestion && (
+                <div style={{
+                  padding: '0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                  fontSize: '0.8125rem',
+                  color: '#b45309',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem',
+                }}>
+                  <strong>Nenhum par compatível encontrado automaticamente</strong>
+                  <span>
+                    Não há veículo e motorista disponíveis que atendam simultaneamente à capacidade e às licenças exigidas. Você pode escolher manualmente abaixo.
+                  </span>
+                </div>
+              )}
 
-                    return (
-                      <option key={d.username} value={d.username} disabled={isDisabled}>
-                        {d.name} (@{d.username}){statusLabel}
+              {!loadingSuggestions && hasSuggestion && suggestedVehicle && suggestedDriver && !isManualEdit && (
+                <div style={{
+                  padding: '0.875rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(34, 197, 94, 0.45)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.06)',
+                  fontSize: '0.8125rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.625rem',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#15803d', fontWeight: 600 }}>
+                    <Sparkles size={16} />
+                    <span>Sugestão Automática Compatível</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div>
+                      <span style={{ color: 'var(--color-text-secondary)', display: 'block', fontSize: '0.75rem' }}>Veículo sugerido:</span>
+                      <strong style={{ color: 'var(--color-text-primary)' }}>
+                        {suggestedVehicle.plate} — {suggestedVehicle.model} ({suggestedVehicle.color})
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--color-text-secondary)', display: 'block', fontSize: '0.75rem' }}>Motorista sugerido:</span>
+                      <strong style={{ color: 'var(--color-text-primary)' }}>
+                        {suggestedDriver.name} (@{suggestedDriver.username})
+                      </strong>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      icon={<Check size={14} />}
+                      disabled={!canConfirmLoad}
+                      onClick={() => {
+                        if (!canConfirmLoad) return
+                        onAction?.('load', order.id, {
+                          driverUsername: suggestedDriver.username,
+                          vehiclePlate: suggestedVehicle.plate.toUpperCase(),
+                        })
+                        setLoadModalOpen(false)
+                      }}
+                    >
+                      Aprovar Sugestão Automática
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      icon={<Edit3 size={14} />}
+                      onClick={() => setIsManualEdit(true)}
+                    >
+                      Editar Sugestão
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!loadingSuggestions && isManualEdit && (
+                <>
+                  {hasSuggestion && suggestedVehicle && suggestedDriver && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                      <span>Editando seleção manualmente.</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoadVehicleId(suggestedVehicle.plate)
+                          setLoadDriverId(suggestedDriver.username)
+                          setIsManualEdit(false)
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          color: 'var(--color-primary)',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          fontSize: '0.75rem',
+                        }}
+                      >
+                        Voltar para sugestão automática
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="ui-form-group">
+                    <label className="ui-label" style={{ fontWeight: 600 }}>1. Veículo de Transporte *</label>
+                    <select
+                      className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                      value={loadVehicleId}
+                      onChange={(e) => {
+                        const nextVehicle = e.target.value
+                        setLoadVehicleId(nextVehicle)
+                        setLoadDriverId('')
+                      }}
+                    >
+                      <option value="">Selecione um veículo com capacidade suficiente...</option>
+                      {activeVehicles.map((v) => {
+                        const isUnavailable = v.transportState === 'ON_ROUTE' || v.transportState === 'WAITING_DRIVER_DISPATCH'
+                        const isAssembling = v.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
+                        const isUnderWeight = Number(order.weight) > Number(v.maxLoad)
+                        const isUnderVolume = Number(order.volume) > Number(v.internalVolume)
+                        const capacityWarning = (isUnderWeight || isUnderVolume) ? ' ⚠️ [Capacidade Insuficiente]' : ''
+                        const stateLabel = isUnavailable
+                          ? ' (Indisponível)'
+                          : isAssembling
+                            ? ' (Em Montagem de Rota)'
+                            : ' (Disponível)'
+                        return (
+                          <option key={v.plate} value={v.plate} disabled={isUnavailable}>
+                            {v.plate} - {v.model} (Carga: {v.maxLoad}kg | Vol: {v.internalVolume}m³){stateLabel}{capacityWarning}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+
+                  {selectedVehicleObj && (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                      padding: '0.75rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
+                      backgroundColor: hasCapacityError || isVehicleMissingLicense ? 'rgba(239, 68, 68, 0.05)' : 'rgba(34, 197, 94, 0.05)',
+                      fontSize: '0.8125rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Capacidade de Carga ({selectedVehicleObj.maxLoad} kg máx):</span>
+                        {isWeightExceeded ? (
+                          <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
+                            Insuficiente ({order.weight} kg &gt; {selectedVehicleObj.maxLoad} kg)
+                          </span>
+                        ) : (
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                            Compatível ({order.weight} kg / {selectedVehicleObj.maxLoad} kg)
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Capacidade Volumétrica ({selectedVehicleObj.internalVolume} m³ máx):</span>
+                        {isVolumeExceeded ? (
+                          <span style={{ color: 'var(--color-danger-text)', fontWeight: 600 }}>
+                            Insuficiente ({order.volume} m³ &gt; {selectedVehicleObj.internalVolume} m³)
+                          </span>
+                        ) : (
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                            Compatível ({order.volume} m³ / {selectedVehicleObj.internalVolume} m³)
+                          </span>
+                        )}
+                      </div>
+
+                      {isVehicleMissingLicense && (
+                        <div style={{ color: 'var(--color-danger-text)', fontWeight: 500, marginTop: '0.25rem' }}>
+                          Veículo não possui as licenças: {missingVehicleLicenses.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div
+                    className="ui-form-group"
+                    style={{
+                      opacity: loadVehicleId ? 1 : 0.5,
+                      transition: 'opacity 0.2s ease',
+                      cursor: loadVehicleId ? 'default' : 'not-allowed',
+                    }}
+                  >
+                    <label
+                      className="ui-label"
+                      style={{
+                        fontWeight: 600,
+                        color: loadVehicleId ? 'inherit' : 'var(--color-text-muted)',
+                        cursor: loadVehicleId ? 'default' : 'not-allowed',
+                      }}
+                    >
+                      2. Motorista Responsável *
+                    </label>
+                    <select
+                      disabled={!loadVehicleId}
+                      className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition-colors outline-none hover:border-slate-400 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
+                      value={loadDriverId}
+                      onChange={(e) => setLoadDriverId(e.target.value)}
+                    >
+                      <option value="">
+                        {loadVehicleId ? 'Selecione um motorista...' : 'Bloqueado: selecione primeiro um veículo acima...'}
                       </option>
-                    )
-                  })}
-                </select>
-                {!loadVehicleId ? (
-                  <p style={{ marginTop: '0.35rem', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-                    Escolha um veículo acima para liberar a seleção do motorista.
-                  </p>
-                ) : null}
-              </div>
+                      {activeDrivers.map((d) => {
+                        const isBusy = d.transportState === 'ON_ROUTE' || d.transportState === 'WAITING_DRIVER_DISPATCH'
+                        const isDifferentState = !!selectedVehicleObj && d.transportState !== selectedVehicleObj.transportState
+                        const isDifferentRoute =
+                          !!selectedVehicleObj &&
+                          d.transportState === 'WAITING_OPERATOR_AUTHORIZATION' &&
+                          d.route.vehicle.plate !== selectedVehicleObj.plate
+                        const isDisabled = isBusy || isDifferentState || isDifferentRoute
+
+                        const statusLabel =
+                          d.transportState === 'FREE'
+                            ? ' (Disponível)'
+                            : d.transportState === 'WAITING_OPERATOR_AUTHORIZATION'
+                              ? ` (Em Montagem de Rota - ${d.route.vehicle.plate})`
+                              : ' (Indisponível)'
+
+                        return (
+                          <option key={d.username} value={d.username} disabled={isDisabled}>
+                            {d.name} (@{d.username}){statusLabel}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    {!loadVehicleId ? (
+                      <p style={{ marginTop: '0.35rem', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+                        Escolha um veículo acima para liberar a seleção do motorista.
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              )}
             </div>
           </Modal>
         )

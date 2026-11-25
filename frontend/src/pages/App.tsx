@@ -70,7 +70,7 @@ export default function App() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const { loadDrivers } = useDriver()
+  const { drivers, loadDrivers } = useDriver()
   const { vehicles, loadVehicles, registerVehicle, api: vehicleApi } = useVehicle()
   const { orders, loadOrders, api: orderApi } = useOrder()
 
@@ -105,7 +105,13 @@ export default function App() {
   const safeVehicles = Array.isArray(vehicles) ? vehicles : []
 
   const safeUsers = Array.isArray(users) ? users : []
-  const allDrivers = safeUsers.filter((u) => u.role === 'DRIVER')
+  const safeDrivers = Array.isArray(drivers) ? drivers : []
+  const driversByUsername = new Map(safeDrivers.map((d) => [d.username, d]))
+  const userDrivers = safeUsers.filter((u) => u.role === 'DRIVER')
+  const allDrivers =
+    userDrivers.length > 0
+      ? userDrivers.map((u) => driversByUsername.get(u.username) ?? u)
+      : safeDrivers
 
   const userRole = user?.role?.toLowerCase()
   const reloadAll = () =>

@@ -354,12 +354,27 @@ export class RouteManager {
     })
 
     const freeVehicles = await this.prisma.vehicle.findMany({
-      where: { transportState: "FREE", isActive: true },
+      where: {
+        transportState: "FREE",
+        isActive: true,
+        maxLoad: { gte: order.weight },
+        internalVolume: { gte: order.volume },
+      },
       include: { licenses: { select: { licenseId: true } } },
     })
 
     const existingRoutes = await this.prisma.route.findMany({
-      where: { status: "WAITING_OPERATOR_AUTHORIZATION" },
+      where: {
+        status: "WAITING_OPERATOR_AUTHORIZATION",
+        vehicle: {
+          isActive: true,
+          maxLoad: { gte: order.weight },
+          internalVolume: { gte: order.volume },
+        },
+        driver: {
+          isActive: true,
+        },
+      },
       include: {
         driver: {
           select: {

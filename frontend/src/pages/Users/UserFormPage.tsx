@@ -198,8 +198,16 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                   </label>
                   <Input
                     value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
-                    placeholder="Somente números (11 dígitos)"
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '').slice(0, 11)
+                      const masked = raw
+                        .replace(/^(\d{3})(\d)/, '$1.$2')
+                        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+                        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4')
+                      setCpf(masked)
+                    }}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
                     required
                     disabled={isSubmitting || isEditing}
                   />

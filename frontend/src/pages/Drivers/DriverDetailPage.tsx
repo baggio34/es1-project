@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { DriverPreview, UserDetailed } from '../../../../sdk/src/models/user.ts'
 import type { RoutePreview, RouteWithOrders } from '../../../../sdk/src/models/route.ts'
 import type { VehicleSignature } from '../../../../sdk/src/models/vehicle.ts'
@@ -8,7 +8,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/ca
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/table.tsx'
 import { Badge } from '../../components/ui/badge.tsx'
 import { ArrowLeft, Pencil, User, Truck, Package, Map } from 'lucide-react'
-import { formatReg, getDriverStatusBadge } from '../../utils/formatters.tsx'
+import { formatReg, getDriverStatusBadge, getOrderStatusBadge } from '../../utils/formatters.tsx'
+import { userApi } from '../../api/userApi.ts'
+import { routeApi } from '../../api/routeApi.ts'
+import { useAuth } from '../../contexts/AuthContext.tsx'
 
 export type DriverDetailModel = Extract<UserDetailed, { role: 'DRIVER' }> | DriverPreview
 
@@ -29,10 +32,87 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
   onEdit,
   onViewRoute,
 }) => {
-  const assignedRoute = driver.transportState !== 'FREE' ? driver.route : undefined
-  const detailedRoute = assignedRoute
-    ? routes?.find(r => r.id === assignedRoute.id) ?? assignedRoute
+  const { user } = useAuth()
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+
+  const [detailedDriver, setDetailedDriver] = useState<Extract<UserDetailed, { role: 'DRIVER' }> | null>(
+    'licenses' in driver ? driver : null
+  )
+  const [fetchedRoute, setFetchedRoute] = useState<RouteWithOrders | null>(null)
+
+  useEffect(() => {
+    if ('licenses' in driver && Array.isArray(driver.licenses)) {
+      setDetailedDriver(driver)
+      return
+    }
+
+    let cancelled = false
+    userApi
+      .getByUsername(driver.username)
+      .then((data) => {
+        if (!cancelled && data.role === 'DRIVER') {
+          setDetailedDriver(data)
+        }
+      })
+      .catch(console.error)
+
+    return () => {
+      cancelled = true
+    }
+  }, [driver])
+
+  const currentDriver = detailedDriver ?? driver
+  const transportState = 'transportState' in currentDriver && currentDriver.transportState
+    ? currentDriver.transportState
+    : 'FREE'
+
+  const isDriverFree = transportState === 'FREE'
+  const embeddedRoute =
+    !isDriverFree && 'route' in currentDriver
+      ? currentDriver.route
+      : undefined
+  const fallbackRoute = !isDriverFree && !embeddedRoute
+    ? routes?.find(
+        (r) =>
+          r.driver?.username === currentDriver.username &&
+          r.status !== 'COMPLETED'
+      )
     : undefined
+  const assignedRoute = embeddedRoute ?? fallbackRoute
+
+  const routeFromList = assignedRoute
+    ? routes?.find(r => r.id === assignedRoute.id)
+    : undefined
+
+  useEffect(() => {
+    const routeId = assignedRoute?.id
+    if (!routeId) {
+      setFetchedRoute(null)
+      return
+    }
+    if (routeFromList && 'orders' in routeFromList && Array.isArray(routeFromList.orders)) {
+      return
+    }
+
+    let cancelled = false
+    routeApi
+      .getById(routeId)
+      .then((data) => {
+        if (!cancelled) {
+          setFetchedRoute(data)
+        }
+      })
+      .catch(console.error)
+
+    return () => {
+      cancelled = true
+    }
+  }, [assignedRoute?.id, routeFromList])
+
+  const detailedRoute =
+    (fetchedRoute && fetchedRoute.id === assignedRoute?.id ? fetchedRoute : undefined) ??
+    routeFromList ??
+    assignedRoute
 
   const routeVehicle = detailedRoute?.vehicle
   const vehicle = routeVehicle
@@ -42,10 +122,10 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
   const hasVehicle = !!vehicle
   const orders: OrderSignature[] =
     detailedRoute && 'orders' in detailedRoute && Array.isArray(detailedRoute.orders)
-      ? detailedRoute.orders
+      ? [...detailedRoute.orders].sort((a, b) => (a.routeIndex ?? 0) - (b.routeIndex ?? 0))
       : []
   const routeId = detailedRoute?.id
-  const licenses = 'licenses' in driver ? driver.licenses : []
+  const licenses = 'licenses' in currentDriver ? currentDriver.licenses : []
 
   return (
     <div>
@@ -59,11 +139,13 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
             <p className="page-description">Identificador: @{driver.username}</p>
           </div>
         </div>
-        <div className="page-actions">
-          <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(driver.username)}>
-            Editar Cadastro
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="page-actions">
+            <Button variant="outline" icon={<Pencil size={16} />} onClick={() => onEdit(driver.username)}>
+              Editar Cadastro
+            </Button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -73,26 +155,26 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
               <User size={18} color="var(--color-primary)" />
               <CardTitle>Dados Pessoais</CardTitle>
             </div>
-            {getDriverStatusBadge(driver.transportState)}
+            {getDriverStatusBadge(transportState)}
           </CardHeader>
           <CardContent>
             <div className="details-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="detail-item">
                 <span className="detail-label">Nome Completo</span>
-                <span className="detail-value">{driver.name}</span>
+                <span className="detail-value">{currentDriver.name}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">CPF</span>
-                <span className="detail-value detail-value-mono">{formatReg(driver.cpf)}</span>
+                <span className="detail-value detail-value-mono">{formatReg(currentDriver.cpf)}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Status Operacional</span>
-                <span className="detail-value">{getDriverStatusBadge(driver.transportState)}</span>
+                <span className="detail-value">{getDriverStatusBadge(transportState)}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">Usuário</span>
                 <span className="detail-value detail-value-mono" style={{ fontSize: '0.8125rem' }}>
-                  @{driver.username}
+                  @{currentDriver.username}
                 </span>
               </div>
               {licenses.length > 0 && (
@@ -144,7 +226,7 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
             ) : (
               <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                 <p>Nenhum veículo vinculado atualmente.</p>
-                {driver.transportState === 'FREE' && (
+                {transportState === 'FREE' && (
                   <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
                     O motorista está com status <strong>Disponível</strong> para novas rotas.
                   </p>
@@ -182,9 +264,7 @@ export const DriverDetailPage: React.FC<DriverDetailPageProps> = ({
                     <TableCell className="detail-value-mono">#{order.id}</TableCell>
                     <TableCell>{order.clientName} — {order.destination}</TableCell>
                     <TableCell>
-                      <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                        {driver.transportState === 'ON_ROUTE' ? 'Em Transporte' : 'Aguardando Despacho'}
-                      </span>
+                      {getOrderStatusBadge(order.status)}
                     </TableCell>
                   </TableRow>
                 ))}
